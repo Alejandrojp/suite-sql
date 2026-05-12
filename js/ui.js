@@ -72,22 +72,17 @@ export function handleFloatingScrollButton() {
     const btn = document.getElementById('floating-scroll-btn');
     if (!btn) return;
     
+    // Cálculo seguro multi-navegador
     const scrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
     const scrollHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-    const clientHeight = document.documentElement.clientHeight;
+    const clientHeight = window.innerHeight || document.documentElement.clientHeight;
 
     if ((clientHeight + scrollY) >= scrollHeight - 150) {
         btn.innerHTML = '⬆️';
-        btn.onclick = () => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); 
-        };
+        btn.dataset.dir = 'up'; 
     } else {
         btn.innerHTML = '⬇️';
-        btn.onclick = () => {
-            window.scrollTo({ top: scrollHeight, behavior: 'smooth' });
-            document.documentElement.scrollTo({ top: scrollHeight, behavior: 'smooth' }); 
-        };
+        btn.dataset.dir = 'down'; 
     }
 }
 
