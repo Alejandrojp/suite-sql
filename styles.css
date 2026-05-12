@@ -20,7 +20,7 @@ body.dark {
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; width: 100%; min-height: 100vh; overflow-x: hidden; overflow-y: auto !important; }
+html, body { margin: 0; padding: 0; width: 100%; min-height: 100vh; overflow-x: hidden; }
 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); transition: 0.3s; padding-bottom: 80px; scroll-behavior: smooth; }
 
 .container { max-width: 1000px; margin: 0 auto; background: var(--card); padding: 25px; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
