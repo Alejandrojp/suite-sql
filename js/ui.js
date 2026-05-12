@@ -71,12 +71,23 @@ export function toggleTheme() {
 export function handleFloatingScrollButton() {
     const btn = document.getElementById('floating-scroll-btn');
     if (!btn) return;
-    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 150) {
+    
+    const scrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    const scrollHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+    const clientHeight = document.documentElement.clientHeight;
+
+    if ((clientHeight + scrollY) >= scrollHeight - 150) {
         btn.innerHTML = '⬆️';
-        btn.onclick = () => window.scrollTo({top: 0, behavior: 'smooth'});
+        btn.onclick = () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            document.documentElement.scrollTo({ top: 0, behavior: 'smooth' }); 
+        };
     } else {
         btn.innerHTML = '⬇️';
-        btn.onclick = () => window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
+        btn.onclick = () => {
+            window.scrollTo({ top: scrollHeight, behavior: 'smooth' });
+            document.documentElement.scrollTo({ top: scrollHeight, behavior: 'smooth' }); 
+        };
     }
 }
 
