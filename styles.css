@@ -193,7 +193,7 @@ body.dark .store-category-header:hover { background: #444; }
 .btn-secondary:hover { background-color: #5a6268; }
 .btn-small { padding: 6px 12px; font-size: 12px; cursor: pointer; background: #6c757d; color: white; border: none; border-radius: 4px; font-weight: 600; transition: background 0.2s; }
 .btn-small:hover { filter: brightness(1.1); }
-.quick-filter-group { display: flex; gap: 5px; margin-left: auto; flex-wrap: wrap; }
+.quick-filter-group { display: flex; gap: 5px; flex-wrap: wrap; align-items: center;  border-left: 2px solid var(--border);  padding-left: 10px; margin-left: 5px; }
 .btn-preset { background-color: #17a2b8; font-size: 11px; padding: 4px 8px; color: white; border: none; border-radius: 4px; cursor: pointer; }
 .btn-custom-group { background-color: #007bff; border-color: #007bff; }
 .custom-groups-bar { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); width: 100%; align-items: center; }
@@ -323,10 +323,10 @@ pre.query-box:active { filter: brightness(0.9); }
     transition: background-color 0.1s ease-in-out;
 }
 
-/* Adaptación para pantallas pequeñas */
 @media (max-width: 768px) {
     .actions-row, .tabs { flex-direction: column; }
     .store-tools .input-wrapper { max-width: 100%; width: 100%; }
     .filter-config-box > div { flex-direction: column; }
     .tab-btn { margin-bottom: 5px; border-radius: 4px; border: 1px solid var(--border); }
+    .quick-filter-group { border-left: none; padding-left: 0; margin-left: 0; width: 100%; margin-top: 5px; }
 }
