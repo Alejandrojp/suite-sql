@@ -81,8 +81,8 @@
                 <span class="close-modal" data-modal="conversorModal">&times;</span>
             </div>
             <div class="input-group">
-                <p style="font-size:0.9em; color:#666; margin-bottom:5px;">Pega los números de tienda visuales (Ej: 0, 71, 85...) separados por comas o saltos de línea.</p>
-                <textarea id="inputNumsTienda" class="paste-area" placeholder="85, 86, 71..."></textarea>
+                <p style="font-size:0.9em; color:#666; margin-bottom:5px;">Pega tu lista de tiendas. El sistema extraerá los números automáticamente de cualquier texto.</p>
+                <textarea id="inputNumsTienda" class="paste-area" placeholder="Pega texto, números o lista aquí..."></textarea>
             </div>
             <div class="actions-row" style="margin-top: 10px; padding: 0; border: none; box-shadow: none; position: static;">
                 <button class="btn-generate" style="font-size:14px; padding:10px; background-color: var(--theme-blue);" data-action="convertirNumerosAIds">🔄 Obtener IDs DB</button>
@@ -114,10 +114,10 @@
     <div id="pasteModal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
-                <h2>📋 Pegar Lista de Tiendas</h2>
+                <h2>📋 Pegado Inteligente de Tiendas</h2>
                 <span class="close-modal" data-modal="pasteModal">&times;</span>
             </div>
-            <p style="font-size:0.9em; color:#666;">Pega aquí los IDs o Nº de Tienda (Ej: 71, 85, 1009...) separados por comas.</p>
+            <p style="font-size:0.9em; color:#666;">Pega cualquier texto que contenga los IDs o Nº de Tienda. El sistema extraerá los números de forma automática.</p>
             <textarea id="pasteInput" class="paste-area"></textarea>
             <div class="editor-actions" style="justify-content: flex-end;">
                 <button class="btn-secondary" data-action="closeModal" data-modal="pasteModal">Cancelar</button>
@@ -152,12 +152,12 @@
             <div id="tab-masivo" class="tab-content theme-section-green active">
                 <div class="info-box info-green"><strong>Modo Inserción:</strong> Limpia bajas ('B'), inserta nuevos artículos y reordena el grupo.</div>
 
-                <div class="input-group">
+                <div class="input-group article-input-module">
                     <h3 class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                         <span>1. Artículos (IDs)</span>
                         <div style="font-size:12px; display:flex; gap:10px; font-weight:normal; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 6px;">
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_masivo" value="simple" checked> 📝 Lista Simple (1 Grupo)</label>
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_masivo" value="excel"> 📊 Tabla Excel (Varios Grupos)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_masivo" value="simple" checked> 📝 Lista Simple</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_masivo" value="excel"> 📊 Tabla Excel</label>
                         </div>
                         <span id="art-count-mass" class="count-badge art-badge">0 artículos</span>
                     </h3>
@@ -168,7 +168,7 @@
                     </div>
 
                     <div id="wrap-modo-excel-mass" class="input-wrapper" style="display:none;" data-tab="mass">
-                        <p style="font-size:0.85em; color:#666; margin-bottom:8px; margin-top:0;">Pega aquí las 2 columnas de tu Excel <strong>(Cód. Artículo y Grupo)</strong>. Separadas por tabulación o coma. <em>El sistema detecta automáticamente si has copiado la cabecera.</em></p>
+                        <p style="font-size:0.85em; color:#666; margin-bottom:8px; margin-top:0;">Pega aquí las 2 columnas de tu Excel <strong>(Cód. Artículo y Grupo)</strong>.</p>
                         <textarea id="articulos_excel" placeholder="Ejemplo:&#10;50493&#9;Vinos&#10;50494&#9;Bebidas" style="border-color:var(--theme-green);"></textarea>
                         <button class="clear-input-btn" style="top:45px;" data-action="clearInput" data-target="articulos_excel" title="Borrar todo">✖</button>
                         
@@ -291,12 +291,13 @@
 
             <div id="tab-borrar" class="tab-content theme-section-red">
                 <div class="info-box info-red"><strong>Modo Borrado Inteligente:</strong> Elimina artículos y reordena los grupos afectados sin tablas temporales ni comentarios.</div>
-                <div class="input-group">
+                
+                <div class="input-group article-input-module">
                     <h3 class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                         <span>1. Artículos a Borrar (IDs)</span>
                         <div style="font-size:12px; display:flex; gap:10px; font-weight:normal; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 6px;">
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_borrar" value="simple" checked> 📝 Lista Simple (1 Grupo)</label>
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_borrar" value="excel"> 📊 Tabla Excel (Varios Grupos)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_borrar" value="simple" checked> 📝 Lista Simple</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_borrar" value="excel"> 📊 Tabla Excel</label>
                         </div>
                         <span id="art-count-del" class="count-badge art-badge">0 artículos</span>
                     </h3>
@@ -307,7 +308,7 @@
                     </div>
 
                     <div id="wrap-modo-excel-del" class="input-wrapper" style="display:none;" data-tab="del">
-                        <p style="font-size:0.85em; color:#666; margin-bottom:8px; margin-top:0;">Pega aquí las 2 columnas de tu Excel <strong>(Cód. Artículo y Grupo)</strong>. Separadas por tabulación o coma.</p>
+                        <p style="font-size:0.85em; color:#666; margin-bottom:8px; margin-top:0;">Pega aquí las 2 columnas de tu Excel <strong>(Cód. Artículo y Grupo)</strong>.</p>
                         <textarea id="articulos_excel_del" placeholder="Ejemplo:&#10;50493&#9;Vinos&#10;50494&#9;Bebidas" style="border-color:var(--theme-red);"></textarea>
                         <button class="clear-input-btn" style="top:45px;" data-action="clearInput" data-target="articulos_excel_del" title="Borrar todo">✖</button>
                         
@@ -423,22 +424,20 @@
             <div id="tab-swap" class="tab-content theme-section-purple">
                 <div class="info-box info-purple"><strong>Modo Intercambio:</strong> Cambia un artículo por otro (Update) en los grupos seleccionados.</div>
 
-                <div class="input-group">
+                <div class="input-group article-input-module">
                     <h3 class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                         <span>1. Tabla de Cambios</span>
                         <div style="font-size:12px; display:flex; gap:10px; font-weight:normal; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 6px;">
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_swap" value="simple" checked> 📝 Manual (Fila a fila)</label>
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_swap" value="excel"> 📊 Tabla Excel (Pegar masivo)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_swap" value="simple" checked> 📝 Manual</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_swap" value="excel"> 📊 Tabla Excel</label>
                         </div>
                         <span id="art-count-swap-badge" class="count-badge art-badge">0 pares</span>
                     </h3>
 
-                    <div id="wrap-modo-simple-swap">
-                        <table class="swap-table">
-                            <thead><tr><th style="width: 45%;">ID Artículo Viejo (A quitar)</th><th style="width: 45%;">ID Artículo Nuevo (A poner)</th><th style="width: 10%;"></th></tr></thead>
-                            <tbody id="swap-rows"></tbody>
-                        </table>
-                        <button class="btn-add-row" data-action="addSwapRow">+ Añadir fila de cambio</button>
+                    <div id="wrap-modo-simple-swap" class="input-wrapper">
+                        <p style="font-size:0.85em; color:#666; margin-bottom:8px; margin-top:0;">Escribe: <strong>ID_Viejo, ID_Nuevo</strong> (un par por línea).</p>
+                        <textarea id="articulos_swap" placeholder="Ej:&#10;50493, 50800&#10;50494, 50801"></textarea>
+                        <button class="clear-input-btn" data-action="clearInput" data-target="articulos_swap" title="Borrar todo">✖</button>
                     </div>
 
                     <div id="wrap-modo-excel-swap" class="input-wrapper" style="display:none;" data-tab="swap">
@@ -675,20 +674,18 @@
                     <strong>Instrucciones:</strong> Elige cómo quieres añadir los artículos y pega tus datos en la caja correspondiente.
                 </div>
 
-                <div class="input-group">
+                <div class="input-group article-input-module">
                     <h3 class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                        <span>Modo de Inserción</span>
+                        <span>1. Entrada de Datos (Plantillas)</span>
                         <div style="font-size:12px; display:flex; gap:10px; font-weight:normal; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 6px;">
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_add" value="excel_cod" checked> 🔢 Excel (Por Código)</label>
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_add" value="excel_tienda"> 🏪 Excel (Por Tiendas)</label>
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_add" value="manual"> ✍️ Manual (Un Proveedor)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_add" value="excel_cod" checked> 🔢 Excel (Código)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_add" value="excel_tienda"> 🏪 Excel (Tiendas)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_add" value="manual"> ✍️ Manual (1 Prov)</label>
                         </div>
                     </h3>
-                </div>
 
-                <div id="wrap-excel-add">
-                    <div class="input-group">
-                        <label id="label-paste-add">Pegar celdas de Excel (codigo plantilla, articulo, stock):</label>
+                    <div id="wrap-excel-add" class="input-wrapper">
+                        <label id="label-paste-add">Pegar celdas de Excel (Cód. Plantilla, Artículo, Stock):</label>
                         <div class="input-wrapper">
                             <textarea id="paste-add" placeholder="codigo&#9;articulo&#9;stock&#10;1475&#9;48727&#9;10&#10;3639&#9;49009&#9;2"></textarea>
                             <button class="clear-input-btn" data-action="clearInput" data-target="paste-add" title="Borrar todo">✖</button>
@@ -710,30 +707,30 @@
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <div id="wrap-manual-add" style="display:none;">
-                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-                        <div style="flex: 2;">
-                            <label>Proveedor (Ej: MBcold Frio):</label>
-                            <div class="input-wrapper">
-                                <input type="text" id="prov-nombre" placeholder="Escribe el nombre del proveedor...">
-                                <button class="clear-input-btn" data-action="clearInput" data-target="prov-nombre">✖</button>
+                    <div id="wrap-manual-add" style="display:none; padding-top: 15px; border-top: 1px solid var(--border);">
+                        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div style="flex: 2;">
+                                <label>Proveedor (Ej: MBcold Frio):</label>
+                                <div class="input-wrapper">
+                                    <input type="text" id="prov-nombre" placeholder="Escribe el nombre del proveedor...">
+                                    <button class="clear-input-btn" data-action="clearInput" data-target="prov-nombre">✖</button>
+                                </div>
+                            </div>
+                            <div style="flex: 1;">
+                                <label>Stock a añadir:</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="prov-stock" value="1" min="0">
+                                </div>
                             </div>
                         </div>
-                        <div style="flex: 1;">
-                            <label>Stock a añadir:</label>
-                            <div class="input-wrapper">
-                                <input type="number" id="prov-stock" value="1" min="0">
-                            </div>
-                        </div>
-                    </div>
 
-                    <div class="input-group">
-                        <label>Artículos a añadir (IDs separados por intro o coma):</label>
-                        <div class="input-wrapper">
-                            <textarea id="prov-articulos" placeholder="Ej:&#10;50493&#10;50494"></textarea>
-                            <button class="clear-input-btn" data-action="clearInput" data-target="prov-articulos">✖</button>
+                        <div class="input-group" style="margin-bottom:0;">
+                            <label>Artículos a añadir (IDs separados por intro o coma):</label>
+                            <div class="input-wrapper">
+                                <textarea id="prov-articulos" placeholder="Ej:&#10;50493&#10;50494"></textarea>
+                                <button class="clear-input-btn" data-action="clearInput" data-target="prov-articulos">✖</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -804,20 +801,18 @@
                     <strong>Modo Eliminación:</strong> Elige cómo quieres eliminar los artículos de tus plantillas de forma masiva.
                 </div>
 
-                <div class="input-group">
+                <div class="input-group article-input-module">
                     <h3 class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                         <span>Modo de Eliminación</span>
                         <div style="font-size:12px; display:flex; gap:10px; font-weight:normal; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 6px;">
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_del" value="excel_cod" checked> 🔢 Excel (Por Código)</label>
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_del" value="excel_tienda"> 🏪 Excel (Por Tiendas)</label>
-                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_del" value="manual"> ✍️ Manual (Un Proveedor)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_del" value="excel_cod" checked> 🔢 Excel (Código)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_del" value="excel_tienda"> 🏪 Excel (Tiendas)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_del" value="manual"> ✍️ Manual (1 Prov)</label>
                         </div>
                     </h3>
-                </div>
 
-                <div id="wrap-excel-del">
-                    <div class="input-group">
-                        <label id="label-paste-del">Pegar celdas de Excel (codigo plantilla, articulo):</label>
+                    <div id="wrap-excel-del" class="input-wrapper">
+                        <label id="label-paste-del">Pegar celdas de Excel (Cód. Plantilla, Artículo):</label>
                         <div class="input-wrapper">
                             <textarea id="paste-del" placeholder="codigo&#9;articulo&#10;1475&#9;48727&#10;3639&#9;49009"></textarea>
                             <button class="clear-input-btn" data-action="clearInput" data-target="paste-del">✖</button>
@@ -839,24 +834,24 @@
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <div id="wrap-manual-del" style="display:none;">
-                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-                        <div style="flex: 1;">
-                            <label>Proveedor (Nombre de la Plantilla, Ej: MBcold Frio):</label>
-                            <div class="input-wrapper">
-                                <input type="text" id="prov-nombre-del" placeholder="Escribe el nombre del proveedor a buscar...">
-                                <button class="clear-input-btn" data-action="clearInput" data-target="prov-nombre-del">✖</button>
+                    <div id="wrap-manual-del" style="display:none; padding-top: 15px; border-top: 1px solid var(--border);">
+                        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div style="flex: 1;">
+                                <label>Proveedor (Nombre de la Plantilla, Ej: MBcold Frio):</label>
+                                <div class="input-wrapper">
+                                    <input type="text" id="prov-nombre-del" placeholder="Escribe el nombre del proveedor a buscar...">
+                                    <button class="clear-input-btn" data-action="clearInput" data-target="prov-nombre-del">✖</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="input-group">
-                        <label>Artículos a ELIMINAR (IDs separados por intro o coma):</label>
-                        <div class="input-wrapper">
-                            <textarea id="prov-articulos-del" placeholder="Ej:&#10;50493&#10;50494"></textarea>
-                            <button class="clear-input-btn" data-action="clearInput" data-target="prov-articulos-del">✖</button>
+                        <div class="input-group" style="margin-bottom:0;">
+                            <label>Artículos a ELIMINAR (IDs separados por intro o coma):</label>
+                            <div class="input-wrapper">
+                                <textarea id="prov-articulos-del" placeholder="Ej:&#10;50493&#10;50494"></textarea>
+                                <button class="clear-input-btn" data-action="clearInput" data-target="prov-articulos-del">✖</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1113,7 +1108,7 @@
         }
     </script>
 
-    <script type="module" src="js/main.js?v=2.0"></script>
+    <script type="module" src="js/main.js?v=2.1"></script>
 
 </body>
 </html>
