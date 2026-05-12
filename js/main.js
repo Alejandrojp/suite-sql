@@ -314,6 +314,7 @@ function limpiarErroresExcel(tab) {
 function abrirModalConflictos(tab) {
     let data = State.state.excel[tab].data;
     let conflictGroups = {}; 
+    
     data.forEach(d => {
         if (d.conflict && !d.duplicate) {
             if (!conflictGroups[d.art]) conflictGroups[d.art] = new Set();
@@ -321,16 +322,42 @@ function abrirModalConflictos(tab) {
         }
     });
 
-    let listHTML = '';
+    const conflictList = document.getElementById('conflict-list');
+    conflictList.innerHTML = ''; 
+    const fragment = document.createDocumentFragment();
+
     for (let art in conflictGroups) {
-        let options = Array.from(conflictGroups[art]).map(g => `<option value="${g}">${g}</option>`).join('');
-        listHTML += `<div class="conflict-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--border);">
-            <strong style="font-family:monospace; font-size:15px; color:var(--theme-purple);">#${art}</strong>
-            <select id="resolve-${art}" style="width:200px; padding:6px; border-color:var(--border);">
-                ${options}<option value="DELETE" style="color:red; font-weight:bold;">❌ Eliminar de todos</option>
-            </select></div>`;
+        const div = document.createElement('div');
+        div.className = 'conflict-item';
+        div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--border);';
+        
+        const strong = document.createElement('strong');
+        strong.style.cssText = 'font-family:monospace; font-size:15px; color:var(--theme-purple);';
+        strong.textContent = `#${art}`; 
+        
+        const select = document.createElement('select');
+        select.id = `resolve-${art}`;
+        select.style.cssText = 'width:200px; padding:6px; border-color:var(--border);';
+        
+        Array.from(conflictGroups[art]).forEach(g => {
+            const option = document.createElement('option');
+            option.value = g;
+            option.textContent = g; 
+            select.appendChild(option);
+        });
+
+        const optionDelete = document.createElement('option');
+        optionDelete.value = "DELETE";
+        optionDelete.style.cssText = 'color:red; font-weight:bold;';
+        optionDelete.textContent = "❌ Eliminar de todos";
+        select.appendChild(optionDelete);
+
+        div.appendChild(strong);
+        div.appendChild(select);
+        fragment.appendChild(div);
     }
-    document.getElementById('conflict-list').innerHTML = listHTML;
+    
+    conflictList.appendChild(fragment);
     UI.openModal('conflictModal');
 }
 
@@ -870,6 +897,19 @@ document.getElementById('importFile').addEventListener('change', function() {
 window.addEventListener('beforeunload', function (e) {
     const hayResultados = Array.from(document.querySelectorAll('.output-section')).some(el => el.style.display === 'block');
     if (hayResultados) { e.preventDefault(); e.returnValue = ''; }
+});
+window.addEventListener('error', (event) => {
+    console.error("System Error:", event.error);
+    if(window.UI && window.UI.showNotification) {
+        window.UI.showNotification(`⚠️ Error crítico interceptado. Revisa la consola.`);
+    }
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error("Unhandled Promise:", event.reason);
+    if(window.UI && window.UI.showNotification) {
+        window.UI.showNotification(`⚠️ Error asíncrono detectado. Revisa la consola.`);
+    }
 });
 
 document.addEventListener('keydown', (e) => {

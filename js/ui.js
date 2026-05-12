@@ -277,7 +277,8 @@ function getCategoryName(type) {
 
 export function crearListaTiendas(containerId, counterId, onChangeCallback) {
     const listContainer = document.getElementById(containerId);
-    if(!listContainer) return;
+    if (!listContainer) return;
+    
     listContainer.innerHTML = ''; 
     
     const enriched = state.tiendasData.map(t => ({
@@ -286,7 +287,6 @@ export function crearListaTiendas(containerId, counterId, onChangeCallback) {
     
     const orderMap = { 'AEROPUERTO': 1, 'ESTACI': 2, 'KIOSKO': 3, 'CALLE': 4, 'OTRO': 5 };
     
-    // ORDENACIÓN AVANZADA
     enriched.sort((a, b) => {
         const orderA = orderMap[a.type] || 99; 
         const orderB = orderMap[b.type] || 99;
@@ -294,14 +294,18 @@ export function crearListaTiendas(containerId, counterId, onChangeCallback) {
         return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
     });
 
-    let lastCategory = null; let groupContainer = null; let itemsContainer = null;
+    const fragment = document.createDocumentFragment();
+    let lastCategory = null; 
+    let groupContainer = null; 
+    let itemsContainer = null;
 
     enriched.forEach((tienda, index) => {
         if (tienda.type !== lastCategory) {
-            if (groupContainer) listContainer.appendChild(groupContainer);
+            if (groupContainer) fragment.appendChild(groupContainer);
+            
             groupContainer = document.createElement('div');
             groupContainer.className = 'store-group-container';
-            const catName = getCategoryName(tienda.type);
+            const catName = getCategoryName(tienda.type) || tienda.type;
             const groupId = containerId + '-group-' + tienda.type;
             const isCollapsed = state.collapsedGroups[groupId] ? 'collapsed' : '';
             
@@ -335,10 +339,12 @@ export function crearListaTiendas(containerId, counterId, onChangeCallback) {
             };
 
             groupContainer.appendChild(header);
+            
             itemsContainer = document.createElement('div');
             itemsContainer.className = 'store-group-items ' + isCollapsed;
             itemsContainer.id = groupId;
             groupContainer.appendChild(itemsContainer);
+            
             lastCategory = tienda.type;
         }
         
@@ -377,9 +383,13 @@ export function crearListaTiendas(containerId, counterId, onChangeCallback) {
         if(nombreLimpio.trim() === "") nombreLimpio = tienda.name;
 
         label.innerHTML = `<strong>${tienda.id}</strong> - ${nombreLimpio}`; 
-        itemDiv.appendChild(checkbox); itemDiv.appendChild(label); itemsContainer.appendChild(itemDiv);
+        itemDiv.appendChild(checkbox); 
+        itemDiv.appendChild(label); 
+        itemsContainer.appendChild(itemDiv);
     });
-    if (groupContainer) listContainer.appendChild(groupContainer);
+
+    if (groupContainer) fragment.appendChild(groupContainer);
+    listContainer.appendChild(fragment);
 }
 
 export function actualizarContador(containerId, counterId) {
