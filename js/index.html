@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suite SQL - Enrique Tomás</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍖</text></svg>">
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+    
+    <link href="styles.css" rel="stylesheet" />
+</head>
+<body>
+
+    <div id="notification-area"></div>
+    <button id="btn-theme-toggle" class="theme-toggle" title="Modo Oscuro/Claro">🌓</button>
+    <button id="floating-scroll-btn" title="Ir arriba/abajo">⬇️</button>
+
+    <div class="app-switcher">
+        <button id="btn-nav-tpvs" class="nav-app-btn active" onclick="switchApp('tpvs')">🖥️ GESTIÓN TPVs</button>
+        <button id="btn-nav-plantillas" class="nav-app-btn" onclick="switchApp('plantillas')">📄 GESTIÓN PLANTILLAS</button>
+    </div>
+
+    <div id="conflictModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>⚠️ Resolver Conflictos</h2>
+                <span class="close-modal" data-modal="conflictModal">&times;</span>
+            </div>
+            <p style="font-size:0.95em; color:#666; margin-top:0;">Se ha detectado el mismo artículo asignado a <strong>diferentes grupos</strong>. Por favor, selecciona en qué grupo debe quedarse o elimínalo de la lista:</p>
+            <div id="conflict-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 6px;"></div>
+            <div class="editor-actions" style="justify-content: flex-end;">
+                <button class="btn-secondary" data-action="closeModal" data-modal="conflictModal">Cancelar</button>
+                <button class="btn-generate" style="flex:0; padding:10px 20px; font-size:14px; background-color: var(--theme-purple);" data-action="aplicarResolucionConflictos">Aplicar y Limpiar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tiendasModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚙️ Configuración de Tiendas</h2>
+                <span class="close-modal" data-modal="tiendasModal">&times;</span>
+            </div>
+            <div style="margin-bottom: 10px; font-size:0.9em; color:#666;">
+                <button class="btn-small" data-action="exportarConfig" style="margin-right: 5px; background: #17a2b8; border-color: #17a2b8;">💾 Backup Datos</button>
+                <input type="file" id="importFile" style="display:none">
+                <button class="btn-small" data-action="clickImport" style="margin-right: 5px; background: #17a2b8; border-color: #17a2b8;">📂 Restaurar Backup</button>
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="font-size: 12px; color: #666;">Pegado Masivo de Tiendas (Copia de Excel: ID [TAB] Nombre)</label>
+                <textarea id="pasteNewStores" placeholder="Ej: 100&#9;TIENDA MADRID..." style="height: 60px; font-size:12px; margin-bottom:5px; border: 1px solid var(--theme-green);"></textarea>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-small" style="background:var(--theme-green); border-color:var(--theme-green); flex:1;" data-action="procesarPegadoTiendas">📋 Añadir Tiendas Pegadas</button>
+                    <button class="btn-small" data-action="addNewStoreRow" style="flex:1;">+ Añadir 1 Fila Vacía</button>
+                </div>
+            </div>
+            <div class="editor-table-container">
+                <table class="editor-table">
+                    <thead><tr><th style="width: 100px;">ID (DB)</th><th>Nombre Comercial</th><th style="width: 50px;"></th></tr></thead>
+                    <tbody id="storeEditorRows"></tbody>
+                </table>
+            </div>
+            <div class="editor-actions">
+                <button class="btn-small" style="background:#dc3545;" data-action="restaurarTiendasOriginales">↺ Reset Default</button>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-secondary" data-action="closeModal" data-modal="tiendasModal">Cancelar</button>
+                    <button class="btn-generate" style="flex:0; padding:10px 20px; font-size:14px; background-color: var(--theme-green);" data-action="guardarTiendasEditadas">💾 Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="conversorModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>🔢 Conversor: Nº Tienda ➔ ID Base de Datos</h2>
+                <span class="close-modal" data-modal="conversorModal">&times;</span>
+            </div>
+            <div class="input-group">
+                <p style="font-size:0.9em; color:#666; margin-bottom:5px;">Pega tu lista de tiendas. El sistema extraerá los números automáticamente de cualquier texto.</p>
+                <textarea id="inputNumsTienda" class="paste-area" placeholder="Pega texto, números o lista aquí..."></textarea>
+            </div>
+            <div class="actions-row" style="margin-top: 10px; padding: 0; border: none; box-shadow: none; position: static;">
+                <button class="btn-generate" style="font-size:14px; padding:10px; background-color: var(--theme-blue);" data-action="convertirNumerosAIds">🔄 Obtener IDs DB</button>
+            </div>
+            <div id="resultadoConversor" style="display:none; margin-top: 20px; border-top: 1px solid var(--border); padding-top:10px;">
+                <label>IDs de Base de Datos encontrados (para copiar):</label>
+                <pre class="query-box" id="outputIdsDb" style="max-height: 100px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;"></pre>
+                <div style="margin-top:5px; text-align:right;">
+                    <button class="copy-btn" data-action="copyTarget" data-copytarget="outputIdsDb">Copiar IDs</button>
+                </div>
+                <div id="logConversor" style="font-size: 0.85em; margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.03); border-radius: 4px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="groupsModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>⭐ Gestión de Mis Grupos</h2>
+                <span class="close-modal" data-modal="groupsModal">&times;</span>
+            </div>
+            <div class="group-manager-list" id="groupManagerList"></div>
+            <div class="editor-actions" style="justify-content: flex-end;">
+                <button class="btn-secondary" data-action="closeModal" data-modal="groupsModal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="pasteModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>📋 Pegado Inteligente de Tiendas</h2>
+                <span class="close-modal" data-modal="pasteModal">&times;</span>
+            </div>
+            <p style="font-size:0.9em; color:#666;">Pega cualquier texto que contenga los IDs o Nº de Tienda. El sistema extraerá los números de forma automática.</p>
+            <textarea id="pasteInput" class="paste-area"></textarea>
+            <div class="editor-actions" style="justify-content: flex-end;">
+                <button class="btn-secondary" data-action="closeModal" data-modal="pasteModal">Cancelar</button>
+                <button class="btn-generate" style="flex:0; padding:10px 20px; font-size:14px; background-color: var(--theme-purple);" data-action="procesarPegado">Procesar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-tpvs" class="app-section active">
+        <div class="container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h1 style="margin: 0;">🛠️ SQL TPVs</h1>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <div class="safe-mode-toggle" title="Envuelve las consultas peligrosas en transacciones">
+                        <input type="checkbox" id="safeMode" checked>
+                        <label for="safeMode" style="margin:0;">🛡️ Transacción</label>
+                    </div>
+                    <button class="btn-small" data-action="abrirConversorTiendas" style="background: #e67e22; border-color: #e67e22; height: fit-content;">🔢 Nº a ID</button>
+                    <button class="btn-small" data-action="abrirEditorTiendas" style="background: #6c757d; border-color: #6c757d; height: fit-content;">⚙️ Config Tiendas</button>
+                    <button class="btn-small" data-action="borrarHistorial" style="background: #e74c3c; border-color: #e74c3c; height: fit-content;">🗑️ Historial</button>
+                    <button class="btn-small btn-reset" data-action="resetearFormulario" style="height: fit-content;">⚠️ Reset</button>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-btn mass-tab active" data-action="switchTab" data-tab="tab-masivo">🚀 AÑADIR</button>
+                <button class="tab-btn danger-tab" data-action="switchTab" data-tab="tab-borrar">🗑️ BORRAR</button>
+                <button class="tab-btn swap-tab" data-action="switchTab" data-tab="tab-swap">🔄 INTERCAMBIAR</button>
+                <button class="tab-btn repair-tab" data-action="switchTab" data-tab="tab-reparar">🛠️ ORDENAR</button>
+            </div>
+            
+            <div id="tab-masivo" class="tab-content theme-section-green active">
+                <div class="info-box info-green"><strong>Modo Inserción:</strong> Limpia bajas ('B'), inserta nuevos artículos y reordena el grupo.</div>
+
+                <div class="input-group article-input-module">
+                    <h3 class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <span>1. Artículos (IDs)</span>
+                        <div style="font-size:12px; display:flex; gap:10px; font-weight:normal; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 6px;">
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_masivo" value="simple" checked> 📝 Lista Simple</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_masivo" value="excel"> 📊 Tabla Excel</label>
+                        </div>
+                        <span id="art-count-mass" class="count-badge art-badge">0 artículos</span>
+                    </h3>
+                    
+                    <div id="wrap-modo-simple-mass" class="input-wrapper">
+                        <textarea id="articulos" placeholder="Ej:&#10;50493&#10;50494"></textarea>
+                        <button class="clear-input-btn" data-action="clearInput" data-target="articulos" title="Borrar todo">✖</button>
+                    </div>
+
+                    <div id="wrap-modo-excel-mass" class="input-wrapper" style="display:none;" data-tab="mass">
+                        <p style="font-size:0.85em; color:#666; margin-bottom:8px; margin-top:0;">Pega aquí las 2 columnas de tu Excel <strong>(Cód. Artículo y Grupo)</strong>.</p>
+                        <textarea id="articulos_excel" placeholder="Ejemplo:&#10;50493&#9;Vinos&#10;50494&#9;Bebidas" style="border-color:var(--theme-green);"></textarea>
+                        <button class="clear-input-btn" style="top:45px;" data-action="clearInput" data-target="articulos_excel" title="Borrar todo">✖</button>
+                        
+                        <div id="excel-preview-box-mass" class="excel-preview-container">
+                            <div style="display:flex; gap:10px; margin: 10px;">
+                                <input type="text" id="search-excel-mass" placeholder="🔍 Buscar en previsualización..." style="flex:1; padding: 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">
+                                <button class="btn-small" style="background:#e67e22; border-color:#e67e22;" data-action="limpiarErroresExcel" data-tab="mass">🧹 Eliminar filas inválidas</button>
+                            </div>
+                            <table class="excel-preview-table">
+                                <thead><tr><th>Cód. Artículo</th><th>Grupo Detectado</th></tr></thead>
+                                <tbody id="excel-preview-body-mass"></tbody>
+                            </table>
+                            <div class="excel-pagination">
+                                <button id="btn-prev-excel-mass" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="-1" data-tab="mass">◀ Anterior</button>
+                                <span id="excel-page-info-mass" style="font-size:12px; color:#666;">Página 1 de 1</span>
+                                <button id="btn-next-excel-mass" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="1" data-tab="mass">Siguiente ▶</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sec-config-grupo-mass" class="input-group">
+                    <h3 class="section-title">2. Configuración de Grupo (Filtro)</h3>
+                    <div class="filter-config-box">
+                        <label>Configuración de Búsqueda:</label>
+                        <div style="display:flex; gap:10px;">
+                            <select id="campoBusqueda" style="flex:1;"><option value="nombre" selected>📝 Por Nombre (G.nombre)</option><option value="id">🔢 Por ID Grupo (G.idGrupo)</option></select>
+                            <select id="tipoBusqueda" style="flex:1;"><option value="contains" selected>🔹 CONTIENE (Like %...%)</option><option value="exact">🔸 EXACTO (Igual =)</option></select>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 15px;">
+                        <div style="flex: 1;">
+                            <label>Filtro Principal:</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="busq1" list="group-history" placeholder="Ej: Tienda">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="busq1" title="Borrar">✖</button>
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Filtro Secundario:</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="busq2" placeholder="Ej: Delivery">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="busq2" title="Borrar">✖</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <h3 class="section-title">
+                        3. Seleccionar Tiendas 
+                        <span>
+                            <span id="store-count-mass" class="count-badge">0 seleccionadas</span>
+                            <button class="copy-ids-btn" data-action="copiarSoloIDs" data-target="list-mass">Copiar IDs</button>
+                        </span>
+                    </h3>
+                    <div class="store-selector-container">
+                        <div class="store-tools">
+                            <div class="input-wrapper" style="max-width: 150px;">
+                                <input type="text" id="filter-mass" placeholder="🔍 Buscar..." style="padding: 6px; width: 100%;">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="filter-mass" title="Borrar búsqueda">✖</button>
+                            </div>
+                            <button class="btn-small" style="background: #6f42c1; border-color: #6f42c1;" data-action="openPasteModal" data-target="list-mass">📋 Pegar IDs</button>
+                            <button class="btn-small" data-action="guardarGrupo" data-target="list-mass" style="background: #007bff; border-color: #007bff;">+ Guardar Grupo</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-mass" data-state="true">Todos</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-mass" data-state="false">Ninguno</button>
+                            <button class="btn-small" data-action="toggleVerSeleccionados" data-target="list-mass" title="Ver solo lo seleccionado">👁️ Revisar</button>
+                            
+                            <div class="quick-filter-group" id="static-groups-mass">
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-mass" data-type="AEROPUERTO">✈️ Aeros</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-mass" data-type="ESTACI">🚆 Est.</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-mass" data-type="KIOSKO">🏪 Kios</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-mass" data-type="CALLE">🏙️ Calle</button>
+                            </div>
+                        </div>
+                        
+                        <div class="custom-groups-bar">
+                            <button class="btn-small" data-action="openGroupManager" style="background: #6c757d; border-color: #6c757d; font-size:10px;">🗑️ Gestionar Mis Grupos</button>
+                            <span style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></span>
+                            <div id="dynamic-groups-mass" style="display:inline-flex; gap:5px; flex-wrap:wrap;"></div>
+                        </div>
+
+                        <div class="store-list" id="list-mass"></div>
+                    </div>
+                </div>
+
+                <div class="actions-row">
+                    <button id="btn-gen-mass" class="btn-generate btn-gen-mass" data-action="generarSQLMasivo">GENERAR CONSULTAS (Ctrl+Enter)</button>
+                    <div class="safe-mode-toggle" title="Audita solo si los artículos están en el grupo que has filtrado">
+                        <input type="checkbox" id="auditGrupoEspecifico" checked>
+                        <label for="auditGrupoEspecifico">🎯 Auditoría en Grupo</label>
+                    </div>
+                    <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="mass">💾 Descargar</button>
+                    <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
+                </div>
+
+                <div id="res-mass" class="output-section">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin:0; flex:1; text-align:center;">Resultados <span id="time-mass" class="timestamp-info"></span></h3>
+                        <div style="display:flex; align-items: center; gap:10px;">
+                            <div class="safe-mode-toggle" style="background: none; border: none; padding: 0;">
+                                <input type="checkbox" id="cleanCopyMass" title="Copia solo el código SQL sin comentarios">
+                                <label for="cleanCopyMass" style="font-size: 12px; margin: 0; color: #666;">Copiar limpio</label>
+                            </div>
+                            <button class="btn-small" data-action="toggleAllAccordions" data-expanded="false" style="background:#17a2b8; border-color:#17a2b8;">📂 Abrir todos</button>
+                            <button class="btn-small" data-action="hideElement" data-target="res-mass" style="background:#dc3545;">🗑️ Limpiar</button>
+                        </div>
+                    </div>
+                    
+                    <div class="accordion-item"><div class="accordion-header clean">0. 🧹 LIMPIEZA PREVIA (Borrar Bajas 'B')</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="mq0"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header">1. SIMULACIÓN (Select)</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="mq1"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header">2. INSERTAR (Insert)</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="mq2"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header">3. ORDENAR (Update - Solo Activos)</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="mq3"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header">4. REVISAR ORDEN</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="mq4"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header">5. AUDITORÍA FINAL</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="mq5"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header danger">6. 🔙 DESHACER (Borrar lo insertado)</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="mq6"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header warning">7. 🛠️ REPARACIÓN TOTAL (Limpiar + Ordenar)</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="mq7"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                </div>
+            </div>
+
+            <div id="tab-borrar" class="tab-content theme-section-red">
+                <div class="info-box info-red"><strong>Modo Borrado Inteligente:</strong> Elimina artículos y reordena los grupos afectados sin tablas temporales ni comentarios.</div>
+                
+                <div class="input-group article-input-module">
+                    <h3 class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <span>1. Artículos a Borrar (IDs)</span>
+                        <div style="font-size:12px; display:flex; gap:10px; font-weight:normal; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 6px;">
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_borrar" value="simple" checked> 📝 Lista Simple</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_borrar" value="excel"> 📊 Tabla Excel</label>
+                        </div>
+                        <span id="art-count-del" class="count-badge art-badge">0 artículos</span>
+                    </h3>
+                    
+                    <div id="wrap-modo-simple-del" class="input-wrapper">
+                        <textarea id="articulos_borrar" placeholder="Ej:&#10;50493&#10;50494"></textarea>
+                        <button class="clear-input-btn" data-action="clearInput" data-target="articulos_borrar" title="Borrar todo">✖</button>
+                    </div>
+
+                    <div id="wrap-modo-excel-del" class="input-wrapper" style="display:none;" data-tab="del">
+                        <p style="font-size:0.85em; color:#666; margin-bottom:8px; margin-top:0;">Pega aquí las 2 columnas de tu Excel <strong>(Cód. Artículo y Grupo)</strong>.</p>
+                        <textarea id="articulos_excel_del" placeholder="Ejemplo:&#10;50493&#9;Vinos&#10;50494&#9;Bebidas" style="border-color:var(--theme-red);"></textarea>
+                        <button class="clear-input-btn" style="top:45px;" data-action="clearInput" data-target="articulos_excel_del" title="Borrar todo">✖</button>
+                        
+                        <div id="excel-preview-box-del" class="excel-preview-container">
+                            <div style="display:flex; gap:10px; margin: 10px;">
+                                <input type="text" id="search-excel-del" placeholder="🔍 Buscar en previsualización..." style="flex:1; padding: 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">
+                                <button class="btn-small" style="background:#e67e22; border-color:#e67e22;" data-action="limpiarErroresExcel" data-tab="del">🧹 Eliminar filas inválidas</button>
+                            </div>
+                            <table class="excel-preview-table">
+                                <thead><tr><th>Cód. Artículo</th><th>Grupo Detectado</th></tr></thead>
+                                <tbody id="excel-preview-body-del"></tbody>
+                            </table>
+                            <div class="excel-pagination">
+                                <button id="btn-prev-excel-del" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="-1" data-tab="del">◀ Anterior</button>
+                                <span id="excel-page-info-del" style="font-size:12px; color:#666;">Página 1 de 1</span>
+                                <button id="btn-next-excel-del" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="1" data-tab="del">Siguiente ▶</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sec-config-grupo-del" class="input-group">
+                    <h3 class="section-title">2. Configuración de Grupo (Filtro)</h3>
+                    <div class="filter-config-box">
+                        <label>Configuración de Búsqueda:</label>
+                        <div style="display:flex; gap:10px;">
+                            <select id="campoBusqueda_del" style="flex:1;"><option value="nombre" selected>📝 Por Nombre (G.nombre)</option><option value="id">🔢 Por ID Grupo (G.idGrupo)</option></select>
+                            <select id="tipoBusqueda_del" style="flex:1;"><option value="contains" selected>🔹 CONTIENE (Like %...%)</option><option value="exact">🔸 EXACTO (Igual =)</option></select>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 15px;">
+                        <div style="flex: 1;">
+                            <label>Filtro Principal (Dejar vacío = TODOS):</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="busq1_del" list="group-history" placeholder="Ej: Vinos">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="busq1_del" title="Borrar">✖</button>
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Filtro Secundario:</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="busq2_del" placeholder="Ej: Delivery">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="busq2_del" title="Borrar">✖</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <h3 class="section-title">
+                        3. Seleccionar Tiendas
+                        <span>
+                            <span id="store-count-delete" class="count-badge">0 seleccionadas</span>
+                            <button class="copy-ids-btn" data-action="copiarSoloIDs" data-target="list-delete">Copiar IDs</button>
+                        </span>
+                    </h3>
+                    <div class="store-selector-container">
+                        <div class="store-tools">
+                            <div class="input-wrapper" style="max-width: 150px;">
+                                <input type="text" id="filter-delete" placeholder="🔍 Buscar..." style="padding: 6px; width: 100%;">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="filter-delete" title="Borrar">✖</button>
+                            </div>
+                            <button class="btn-small" style="background: #6f42c1; border-color: #6f42c1;" data-action="openPasteModal" data-target="list-delete">📋 Pegar IDs</button>
+                            <button class="btn-small" data-action="guardarGrupo" data-target="list-delete" style="background: #007bff; border-color: #007bff;">+ Guardar Grupo</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-delete" data-state="true">Todos</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-delete" data-state="false">Ninguno</button>
+                            <button class="btn-small" data-action="toggleVerSeleccionados" data-target="list-delete" title="Ver solo lo seleccionado">👁️ Revisar</button>
+
+                            <div class="quick-filter-group" id="static-groups-delete">
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-delete" data-type="AEROPUERTO">✈️ Aeros</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-delete" data-type="ESTACI">🚆 Est.</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-delete" data-type="KIOSKO">🏪 Kios</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-delete" data-type="CALLE">🏙️ Calle</button>
+                            </div>
+                        </div>
+                        
+                        <div class="custom-groups-bar">
+                            <button class="btn-small" data-action="openGroupManager" style="background: #6c757d; border-color: #6c757d; font-size:10px;">🗑️ Gestionar Mis Grupos</button>
+                            <span style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></span>
+                            <div id="dynamic-groups-delete" style="display:inline-flex; gap:5px; flex-wrap:wrap;"></div>
+                        </div>
+
+                        <div class="store-list" id="list-delete"></div>
+                    </div>
+                </div>
+
+                <div class="actions-row">
+                    <button id="btn-gen-delete" class="btn-generate btn-gen-delete" data-action="generarSQLBorrar">GENERAR BORRADO (Ctrl+Enter)</button>
+                    <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="delete">💾 Descargar</button>
+                    <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
+                </div>
+
+                <div id="res-delete" class="output-section">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin:0; flex:1; text-align:center;">Resultados <span id="time-del" class="timestamp-info"></span></h3>
+                        <div style="display:flex; align-items: center; gap:10px;">
+                            <div class="safe-mode-toggle" style="background: none; border: none; padding: 0;">
+                                <input type="checkbox" id="cleanCopyDel" title="Copia solo el código SQL sin comentarios">
+                                <label for="cleanCopyDel" style="font-size: 12px; margin: 0; color: #666;">Copiar limpio</label>
+                            </div>
+                            <button class="btn-small" data-action="toggleAllAccordions" data-expanded="false" style="background:#17a2b8; border-color:#17a2b8;">📂 Abrir todos</button>
+                            <button class="btn-small" data-action="hideElement" data-target="res-delete" style="background:#dc3545;">🗑️ Limpiar</button>
+                        </div>
+                    </div>
+                    
+                    <div class="accordion-item"><div class="accordion-header warning">0. BACKUP + AUDITORÍA</div><div class="accordion-content show"><pre class="query-box"><code class="language-sql" id="dq_audit"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header fix">1. REORDENAR</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="dq_reorder"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header danger">2. BORRAR </div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="dq_delete"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header rollback">3. 🔙 ROLLBACK (Información)</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="dq_rollback"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                </div>
+            </div>
+
+            <div id="tab-swap" class="tab-content theme-section-purple">
+                <div class="info-box info-purple"><strong>Modo Intercambio:</strong> Cambia un artículo por otro (Update) en los grupos seleccionados.</div>
+
+                <div class="input-group article-input-module">
+                    <h3 class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <span>1. Tabla de Cambios</span>
+                        <div style="font-size:12px; display:flex; gap:10px; font-weight:normal; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 6px;">
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_swap" value="simple" checked> 📝 Manual</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_swap" value="excel"> 📊 Tabla Excel</label>
+                        </div>
+                        <span id="art-count-swap-badge" class="count-badge art-badge">0 pares</span>
+                    </h3>
+
+                    <div id="wrap-modo-simple-swap" class="input-wrapper">
+                        <p style="font-size:0.85em; color:#666; margin-bottom:8px; margin-top:0;">Escribe: <strong>ID_Viejo, ID_Nuevo</strong> (un par por línea).</p>
+                        <textarea id="articulos_swap" placeholder="Ej:&#10;50493, 50800&#10;50494, 50801"></textarea>
+                        <button class="clear-input-btn" data-action="clearInput" data-target="articulos_swap" title="Borrar todo">✖</button>
+                    </div>
+
+                    <div id="wrap-modo-excel-swap" class="input-wrapper" style="display:none;" data-tab="swap">
+                        <p style="font-size:0.85em; color:#666; margin-bottom:8px; margin-top:0;">Pega aquí las 2 columnas de tu Excel <strong>(ID Viejo y ID Nuevo)</strong>.</p>
+                        <textarea id="articulos_excel_swap" placeholder="Ejemplo:&#10;50493&#9;50800&#10;50494&#9;50801" style="border-color:var(--theme-purple);"></textarea>
+                        <button class="clear-input-btn" style="top:45px;" data-action="clearInput" data-target="articulos_excel_swap" title="Borrar todo">✖</button>
+                        
+                        <div id="excel-preview-box-swap" class="excel-preview-container">
+                            <div style="display:flex; gap:10px; margin: 10px;">
+                                <input type="text" id="search-excel-swap" placeholder="🔍 Buscar en previsualización..." style="flex:1; padding: 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">
+                                <button class="btn-small" style="background:#e67e22; border-color:#e67e22;" data-action="limpiarErroresExcel" data-tab="swap">🧹 Eliminar filas inválidas</button>
+                            </div>
+                            <table class="excel-preview-table">
+                                <thead><tr><th>ID Viejo</th><th>ID Nuevo</th></tr></thead>
+                                <tbody id="excel-preview-body-swap"></tbody>
+                            </table>
+                            <div class="excel-pagination">
+                                <button id="btn-prev-excel-swap" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="-1" data-tab="swap">◀ Anterior</button>
+                                <span id="excel-page-info-swap" style="font-size:12px; color:#666;">Página 1 de 1</span>
+                                <button id="btn-next-excel-swap" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="1" data-tab="swap">Siguiente ▶</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sec-config-grupo-swap" class="input-group">
+                    <h3 class="section-title">2. Configuración de Grupo (Filtro)</h3>
+                    <div class="filter-config-box">
+                        <label>Configuración de Búsqueda:</label>
+                        <div style="display:flex; gap:10px;">
+                            <select id="campoBusqueda_swap" style="flex:1;"><option value="nombre" selected>📝 Por Nombre (G.nombre)</option><option value="id">🔢 Por ID Grupo (G.idGrupo)</option></select>
+                            <select id="tipoBusqueda_swap" style="flex:1;"><option value="contains" selected>🔹 CONTIENE (Like %...%)</option><option value="exact">🔸 EXACTO (Igual =)</option></select>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 15px;">
+                        <div style="flex: 1;">
+                            <label>Filtro Principal (Nombre Grupo):</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="busq1_swap" list="group-history" placeholder="Ej: Vinos">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="busq1_swap" title="Borrar">✖</button>
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Filtro Secundario (Opcional):</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="busq2_swap" placeholder="Ej: Delivery">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="busq2_swap" title="Borrar">✖</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <h3 class="section-title">
+                        3. Seleccionar Tiendas
+                        <span>
+                            <span id="store-count-swap" class="count-badge">0 seleccionadas</span>
+                            <button class="copy-ids-btn" data-action="copiarSoloIDs" data-target="list-swap">Copiar IDs</button>
+                        </span>
+                    </h3>
+                    <div class="store-selector-container">
+                        <div class="store-tools">
+                            <div class="input-wrapper" style="max-width: 150px;">
+                                <input type="text" id="filter-swap" placeholder="🔍 Buscar..." style="padding: 6px; width: 100%;">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="filter-swap" title="Borrar">✖</button>
+                            </div>
+                            <button class="btn-small" style="background: #6f42c1; border-color: #6f42c1;" data-action="openPasteModal" data-target="list-swap">📋 Pegar IDs</button>
+                            <button class="btn-small" data-action="guardarGrupo" data-target="list-swap" style="background: #007bff; border-color: #007bff;">+ Guardar Grupo</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-swap" data-state="true">Todos</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-swap" data-state="false">Ninguno</button>
+                            <button class="btn-small" data-action="toggleVerSeleccionados" data-target="list-swap" title="Ver solo lo seleccionado">👁️ Revisar</button>
+                            <div class="quick-filter-group" id="static-groups-swap">
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-swap" data-type="AEROPUERTO">✈️ Aeros</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-swap" data-type="ESTACI">🚆 Est.</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-swap" data-type="KIOSKO">🏪 Kios</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-swap" data-type="CALLE">🏙️ Calle</button>
+                            </div>
+                        </div>
+
+                        <div class="custom-groups-bar">
+                            <button class="btn-small" data-action="openGroupManager" style="background: #6c757d; border-color: #6c757d; font-size:10px;">🗑️ Gestionar Mis Grupos</button>
+                            <span style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></span>
+                            <div id="dynamic-groups-swap" style="display:inline-flex; gap:5px; flex-wrap:wrap;"></div>
+                        </div>
+
+                        <div class="store-list" id="list-swap"></div>
+                    </div>
+                </div>
+
+                <div class="actions-row">
+                    <button id="btn-gen-swap" class="btn-generate btn-gen-swap" data-action="generarSQLSwap">GENERAR INTERCAMBIO (Ctrl+Enter)</button>
+                    <div class="safe-mode-toggle" title="Audita solo si los artículos están en el grupo que has filtrado">
+                        <input type="checkbox" id="auditGrupoEspecificoSwap" checked>
+                        <label for="auditGrupoEspecificoSwap">🎯 Auditoría en Grupo</label>
+                    </div>
+                    <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="swap">💾 Descargar</button>
+                    <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
+                </div>
+
+                <div id="res-swap" class="output-section">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin:0; flex:1; text-align:center;">Resultados <span id="time-swap" class="timestamp-info"></span></h3>
+                        <div style="display:flex; align-items: center; gap:10px;">
+                            <div class="safe-mode-toggle" style="background: none; border: none; padding: 0;">
+                                <input type="checkbox" id="cleanCopySwap" title="Copia solo el código SQL sin comentarios">
+                                <label for="cleanCopySwap" style="font-size: 12px; margin: 0; color: #666;">Copiar limpio</label>
+                            </div>
+                            <button class="btn-small" data-action="toggleAllAccordions" data-expanded="false" style="background:#17a2b8; border-color:#17a2b8;">📂 Abrir todos</button>
+                            <button class="btn-small" data-action="hideElement" data-target="res-swap" style="background:#dc3545;">🗑️ Limpiar</button>
+                        </div>
+                    </div>
+                    <div class="accordion-item"><div class="accordion-header warning">0. AUDITORÍA (Simulación)</div><div class="accordion-content show"><pre class="query-box"><code class="language-sql" id="sq_audit"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header swap">1. SCRIPT UPDATE + REORDER</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="sq_full"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header fix">2. 🔎 COMPROBACIÓN FINAL</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="sq_check"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header rollback">3. 🔙 ROLLBACK (Deshacer Cambio)</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="sq_rollback"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                </div>
+            </div>
+
+            <div id="tab-reparar" class="tab-content theme-section-blue">
+                <div class="info-box info-blue"><strong>Modo Mantenimiento:</strong> Elimina artículos con <code>situacion='B'</code> y reordena los activos desde 0.</div>
+
+                <div class="input-group">
+                    <h3 class="section-title">1. Configuración de Grupo (Filtro)</h3>
+                    <div class="filter-config-box">
+                        <label>Configuración de Búsqueda:</label>
+                        <div style="display:flex; gap:10px;">
+                            <select id="campoBusqueda_repair" style="flex:1;"><option value="nombre" selected>📝 Por Nombre (G.nombre)</option><option value="id">🔢 Por ID Grupo (G.idGrupo)</option></select>
+                            <select id="tipoBusqueda_repair" style="flex:1;"><option value="contains" selected>🔹 CONTIENE (Like %...%)</option><option value="exact">🔸 EXACTO (Igual =)</option></select>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 15px;">
+                        <div style="flex: 1;">
+                            <label>Filtro Principal (Dejar vacío = TODOS):</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="busq1_repair" list="group-history" placeholder="Ej: Vinos">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="busq1_repair" title="Borrar">✖</button>
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Filtro Secundario:</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="busq2_repair" placeholder="Ej: Delivery">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="busq2_repair" title="Borrar">✖</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <h3 class="section-title">
+                        2. Seleccionar Tiendas
+                        <span>
+                            <span id="store-count-repair" class="count-badge">0 seleccionadas</span>
+                            <button class="copy-ids-btn" data-action="copiarSoloIDs" data-target="list-repair">Copiar IDs</button>
+                        </span>
+                    </h3>
+                    <div class="store-selector-container">
+                        <div class="store-tools">
+                            <div class="input-wrapper" style="max-width: 150px;">
+                                <input type="text" id="filter-repair" placeholder="🔍 Buscar..." style="padding: 6px; width: 100%;">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="filter-repair" title="Borrar">✖</button>
+                            </div>
+                            <button class="btn-small" style="background: #6f42c1; border-color: #6f42c1;" data-action="openPasteModal" data-target="list-repair">📋 Pegar IDs</button>
+                            <button class="btn-small" data-action="guardarGrupo" data-target="list-repair" style="background: #007bff; border-color: #007bff;">+ Guardar Grupo</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-repair" data-state="true">Todos</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-repair" data-state="false">Ninguno</button>
+                            <button class="btn-small" data-action="toggleVerSeleccionados" data-target="list-repair" title="Ver solo lo seleccionado">👁️ Revisar</button>
+                            
+                            <div class="quick-filter-group" id="static-groups-repair">
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-repair" data-type="AEROPUERTO">✈️ Aeros</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-repair" data-type="ESTACI">🚆 Est.</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-repair" data-type="KIOSKO">🏪 Kios</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-repair" data-type="CALLE">🏙️ Calle</button>
+                            </div>
+                        </div>
+
+                        <div class="custom-groups-bar">
+                            <button class="btn-small" data-action="openGroupManager" style="background: #6c757d; border-color: #6c757d; font-size:10px;">🗑️ Gestionar Mis Grupos</button>
+                            <span style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></span>
+                            <div id="dynamic-groups-repair" style="display:inline-flex; gap:5px; flex-wrap:wrap;"></div>
+                        </div>
+
+                        <div class="store-list" id="list-repair"></div>
+                    </div>
+                </div>
+
+                <div class="actions-row">
+                    <button id="btn-gen-repair" class="btn-generate btn-gen-repair" data-action="generarSQLReparar">GENERAR LIMPIEZA (Ctrl+Enter)</button>
+                    <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="repair">💾 Descargar</button>
+                    <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
+                </div>
+
+                <div id="res-repair" class="output-section">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin:0; flex:1; text-align:center;">Resultados <span id="time-repair" class="timestamp-info"></span></h3>
+                        <div style="display:flex; align-items: center; gap:10px;">
+                            <button class="btn-small" data-action="toggleAllAccordions" data-expanded="false" style="background:#17a2b8; border-color:#17a2b8;">📂 Abrir todos</button>
+                            <button class="btn-small" data-action="hideElement" data-target="res-repair" style="background:#dc3545;">🗑️ Limpiar</button>
+                        </div>
+                    </div>
+                    <div class="accordion-item"><div class="accordion-header fix">1. ELIMINAR BAJAS </div><div class="accordion-content show"><pre class="query-box"><code class="language-sql" id="rq_delete"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header warning">2. REORDENAR </div><div class="accordion-content show"><pre class="query-box"><code class="language-sql" id="rq_update"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                    <div class="accordion-item"><div class="accordion-header">3. COMPROBACIÓN</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="rq_check"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-plantillas" class="app-section">
+        <div class="container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h1 style="margin: 0;">🛠️ SQL Plantillas</h1>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <div class="safe-mode-toggle" title="Envuelve las consultas peligrosas en transacciones">
+                        <input type="checkbox" id="safeModePlant" checked>
+                        <label for="safeModePlant" style="margin:0;">🛡️ Transacción</label>
+                    </div>
+                    <button class="btn-small" data-action="abrirConversorTiendas" style="background: #e67e22; border-color: #e67e22; height: fit-content;">🔢 Nº a ID</button>
+                    <button class="btn-small" data-action="abrirEditorTiendas" style="background: #6c757d; border-color: #6c757d; height: fit-content;">⚙️ Config Tiendas</button>
+                    <button class="btn-small" data-action="borrarHistorial" style="background: #e74c3c; border-color: #e74c3c; height: fit-content;">🗑️ Historial</button>
+                    <button class="btn-small btn-reset" data-action="resetearFormulario" style="height: fit-content;">⚠️ Reset</button>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-btn green-tab active" data-action="switchTab" data-tab="tab-add">✏️ AÑADIR</button>
+                <button class="tab-btn red-tab" data-action="switchTab" data-tab="tab-excel-del">🗑️ ELIMINAR</button>
+                <button class="tab-btn blue-tab" data-action="switchTab" data-tab="tab-vaciar">🫙 VACIAR</button>
+                <button class="tab-btn orange-tab" data-action="switchTab" data-tab="tab-consulta">🛠️ CONS / EDITAR</button>
+            </div>
+            
+            <div id="tab-add" class="tab-content theme-section-green active">
+                <div class="info-box info-green">
+                    <strong>Instrucciones:</strong> Elige cómo quieres añadir los artículos y pega tus datos en la caja correspondiente.
+                </div>
+
+                <div class="input-group article-input-module">
+                    <h3 class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <span>1. Entrada de Datos (Plantillas)</span>
+                        <div style="font-size:12px; display:flex; gap:10px; font-weight:normal; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 6px;">
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_add" value="excel_cod" checked> 🔢 Excel (Código)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_add" value="excel_tienda"> 🏪 Excel (Tiendas)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_add" value="manual"> ✍️ Manual (1 Prov)</label>
+                        </div>
+                    </h3>
+
+                    <div id="wrap-excel-add" class="input-wrapper">
+                        <label id="label-paste-add">Pegar celdas de Excel (Cód. Plantilla, Artículo, Stock):</label>
+                        <div class="input-wrapper">
+                            <textarea id="paste-add" placeholder="codigo&#9;articulo&#9;stock&#10;1475&#9;48727&#9;10&#10;3639&#9;49009&#9;2"></textarea>
+                            <button class="clear-input-btn" data-action="clearInput" data-target="paste-add" title="Borrar todo">✖</button>
+                        </div>
+
+                        <div id="excel-preview-box-p_add" class="excel-preview-container">
+                            <div style="display:flex; gap:10px; margin: 10px;">
+                                <input type="text" id="search-excel-p_add" placeholder="🔍 Buscar en previsualización..." style="flex:1; padding: 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">
+                                <button class="btn-small" style="background:#e67e22; border-color:#e67e22;" data-action="limpiarErroresExcel" data-tab="p_add">🧹 Eliminar filas inválidas</button>
+                            </div>
+                            <table class="excel-preview-table">
+                                <thead id="thead-p_add"><tr><th>Cód Plantilla</th><th>ID Artículo</th><th>Stock</th></tr></thead>
+                                <tbody id="excel-preview-body-p_add"></tbody>
+                            </table>
+                            <div class="excel-pagination">
+                                <button id="btn-prev-excel-p_add" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="-1" data-tab="p_add">◀ Anterior</button>
+                                <span id="excel-page-info-p_add" style="font-size:12px; color:#666;">Página 1 de 1</span>
+                                <button id="btn-next-excel-p_add" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="1" data-tab="p_add">Siguiente ▶</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="wrap-manual-add" style="display:none; padding-top: 15px; border-top: 1px solid var(--border);">
+                        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div style="flex: 2;">
+                                <label>Proveedor (Ej: MBcold Frio):</label>
+                                <div class="input-wrapper">
+                                    <input type="text" id="prov-nombre" placeholder="Escribe el nombre del proveedor...">
+                                    <button class="clear-input-btn" data-action="clearInput" data-target="prov-nombre">✖</button>
+                                </div>
+                            </div>
+                            <div style="flex: 1;">
+                                <label>Stock a añadir:</label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="prov-stock" value="1" min="0">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group" style="margin-bottom:0;">
+                            <label>Artículos a añadir (IDs separados por intro o coma):</label>
+                            <div class="input-wrapper">
+                                <textarea id="prov-articulos" placeholder="Ej:&#10;50493&#10;50494"></textarea>
+                                <button class="clear-input-btn" data-action="clearInput" data-target="prov-articulos">✖</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group" id="wrap-stores-add" style="display:none;">
+                    <h3 class="section-title">
+                        Seleccionar Tiendas:
+                        <span>
+                            <span id="store-count-add" class="count-badge">0 seleccionadas</span>
+                            <button class="copy-ids-btn" data-action="copiarSoloIDs" data-target="list-add">Copiar IDs</button>
+                        </span>
+                    </h3>
+
+                    <div class="store-selector-container">
+                        <div class="store-tools">
+                            <div class="input-wrapper" style="max-width: 200px;">
+                                <input type="text" id="filter-add" placeholder="🔍 Buscar tienda..." style="padding: 6px; width: 100%;">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="filter-add">✖</button>
+                            </div>
+                            <button class="btn-small" style="background: #6f42c1; border-color: #6f42c1;" data-action="openPasteModal" data-target="list-add">📋 Pegar IDs</button>
+                            <button class="btn-small" style="background: #007bff; border-color: #007bff;" data-action="guardarGrupo" data-target="list-add">+ Guardar Grupo</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-add" data-state="true">Todos</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-add" data-state="false">Ninguno</button>
+                            <button class="btn-small" data-action="toggleVerSeleccionados" data-target="list-add" title="Ver solo lo seleccionado">👁️ Revisar</button>
+                            
+                            <div class="quick-filter-group">
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-add" data-type="AEROPUERTO">✈️ Aeros</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-add" data-type="ESTACI">🚆 Est.</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-add" data-type="KIOSKO">🏪 Kios</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-add" data-type="CALLE">🏙️ Calle</button>
+                            </div>
+                        </div>
+                        <div class="custom-groups-bar">
+                            <button class="btn-small" data-action="openGroupManager" style="background: #6c757d; border-color: #6c757d; font-size:10px;">🗑️ Gestionar Mis Grupos</button>
+                            <span style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></span>
+                            <div id="dynamic-groups-add" style="display:inline-flex; gap:5px; flex-wrap:wrap;"></div>
+                        </div>
+                        <div class="store-list" id="list-add"></div>
+                    </div>
+                </div>
+
+                <div class="actions-row">
+                    <button id="btn-gen-add" class="btn-generate btn-gen-green btn-gen-primary" data-action="generarAddPlantillas">GENERAR INSERT MASIVO (Ctrl+Enter)</button>
+                    <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="p_add">💾 Descargar</button>
+                    <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
+                </div>
+                
+                <div id="res-add" class="output-section">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin:0; flex:1; text-align:center;">Resultados</h3>
+                        <div style="display:flex; align-items: center; gap:10px;">
+                            <div class="safe-mode-toggle" style="background: none; border: none; padding: 0;">
+                                <input type="checkbox" id="cleanCopyAddPlantillas" title="Copia solo el código SQL sin comentarios">
+                                <label for="cleanCopyAddPlantillas" style="font-size: 12px; margin: 0; color: #666;">Copiar limpio</label>
+                            </div>
+                            <button class="btn-small" data-action="toggleAllAccordions" data-expanded="false" style="background:#17a2b8; border-color:#17a2b8;">📂 Abrir todos</button>
+                            <button class="btn-small" data-action="hideElement" data-target="res-add" style="background:#dc3545;">🗑️ Limpiar</button>
+                        </div>
+                    </div>
+                    <div class="accordion-item"><div class="accordion-header" style="border-left-color: var(--theme-green);">1. SCRIPT DE INSERCIÓN</div><div class="accordion-content show"><div class="action-bar"><button class="copy-btn" onclick="window.copyTextPlantillas('out-add', this, 'cleanCopyAddPlantillas')">📋 Copiar</button></div><pre class="query-box"><code class="language-sql" id="out-add"></code></pre></div></div>
+                    <div class="accordion-item"><div class="accordion-header fix">2. 🔎 COMPROBACIÓN FINAL</div><div class="accordion-content"><div class="action-bar"><button class="copy-btn" onclick="window.copyTextPlantillas('out-add-audit', this, 'cleanCopyAddPlantillas')">📋 Copiar</button></div><pre class="query-box"><code class="language-sql" id="out-add-audit"></code></pre></div></div>
+                    <div class="accordion-item"><div class="accordion-header warning">3. 🌍 DÓNDE MÁS ESTÁN ESTOS ARTÍCULOS</div><div class="accordion-content"><div class="action-bar"><button class="copy-btn" onclick="window.copyTextPlantillas('out-add-others', this, 'cleanCopyAddPlantillas')">📋 Copiar</button></div><pre class="query-box"><code class="language-sql" id="out-add-others"></code></pre></div></div>
+                </div>
+            </div>
+
+            <div id="tab-excel-del" class="tab-content theme-section-red">
+                <div class="info-box info-red">
+                    <strong>Modo Eliminación:</strong> Elige cómo quieres eliminar los artículos de tus plantillas de forma masiva.
+                </div>
+
+                <div class="input-group article-input-module">
+                    <h3 class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <span>Modo de Eliminación</span>
+                        <div style="font-size:12px; display:flex; gap:10px; font-weight:normal; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 6px;">
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_del" value="excel_cod" checked> 🔢 Excel (Código)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_del" value="excel_tienda"> 🏪 Excel (Tiendas)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_del" value="manual"> ✍️ Manual (1 Prov)</label>
+                        </div>
+                    </h3>
+
+                    <div id="wrap-excel-del" class="input-wrapper">
+                        <label id="label-paste-del">Pegar celdas de Excel (Cód. Plantilla, Artículo):</label>
+                        <div class="input-wrapper">
+                            <textarea id="paste-del" placeholder="codigo&#9;articulo&#10;1475&#9;48727&#10;3639&#9;49009"></textarea>
+                            <button class="clear-input-btn" data-action="clearInput" data-target="paste-del">✖</button>
+                        </div>
+
+                        <div id="excel-preview-box-p_del" class="excel-preview-container">
+                            <div style="display:flex; gap:10px; margin: 10px;">
+                                <input type="text" id="search-excel-p_del" placeholder="🔍 Buscar en previsualización..." style="flex:1; padding: 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">
+                                <button class="btn-small" style="background:#e67e22; border-color:#e67e22;" data-action="limpiarErroresExcel" data-tab="p_del">🧹 Eliminar filas inválidas</button>
+                            </div>
+                            <table class="excel-preview-table">
+                                <thead id="thead-p_del"><tr><th>Cód Plantilla</th><th>ID Artículo</th></tr></thead>
+                                <tbody id="excel-preview-body-p_del"></tbody>
+                            </table>
+                            <div class="excel-pagination">
+                                <button id="btn-prev-excel-p_del" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="-1" data-tab="p_del">◀ Anterior</button>
+                                <span id="excel-page-info-p_del" style="font-size:12px; color:#666;">Página 1 de 1</span>
+                                <button id="btn-next-excel-p_del" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="1" data-tab="p_del">Siguiente ▶</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="wrap-manual-del" style="display:none; padding-top: 15px; border-top: 1px solid var(--border);">
+                        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div style="flex: 1;">
+                                <label>Proveedor (Nombre de la Plantilla, Ej: MBcold Frio):</label>
+                                <div class="input-wrapper">
+                                    <input type="text" id="prov-nombre-del" placeholder="Escribe el nombre del proveedor a buscar...">
+                                    <button class="clear-input-btn" data-action="clearInput" data-target="prov-nombre-del">✖</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-group" style="margin-bottom:0;">
+                            <label>Artículos a ELIMINAR (IDs separados por intro o coma):</label>
+                            <div class="input-wrapper">
+                                <textarea id="prov-articulos-del" placeholder="Ej:&#10;50493&#10;50494"></textarea>
+                                <button class="clear-input-btn" data-action="clearInput" data-target="prov-articulos-del">✖</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group" id="wrap-stores-del" style="display:none;">
+                    <h3 class="section-title">
+                        Seleccionar Tiendas:
+                        <span>
+                            <span id="store-count-del" class="count-badge">0 seleccionadas</span>
+                            <button class="copy-ids-btn" data-action="copiarSoloIDs" data-target="list-del">Copiar IDs</button>
+                        </span>
+                    </h3>
+                    <div class="store-selector-container">
+                        <div class="store-tools">
+                            <div class="input-wrapper" style="max-width: 200px;">
+                                <input type="text" id="filter-del" placeholder="🔍 Buscar tienda..." style="padding: 6px; width: 100%;">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="filter-del">✖</button>
+                            </div>
+                            <button class="btn-small" style="background: #6f42c1; border-color: #6f42c1;" data-action="openPasteModal" data-target="list-del">📋 Pegar IDs</button>
+                            <button class="btn-small" style="background: #007bff; border-color: #007bff;" data-action="guardarGrupo" data-target="list-del">+ Guardar Grupo</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-del" data-state="true">Todos</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-del" data-state="false">Ninguno</button>
+                            <button class="btn-small" data-action="toggleVerSeleccionados" data-target="list-del" title="Ver solo lo seleccionado">👁️ Revisar</button>
+                            
+                            <div class="quick-filter-group">
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-del" data-type="AEROPUERTO">✈️ Aeros</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-del" data-type="ESTACI">🚆 Est.</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-del" data-type="KIOSKO">🏪 Kios</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-del" data-type="CALLE">🏙️ Calle</button>
+                            </div>
+                        </div>
+                        <div class="custom-groups-bar">
+                            <button class="btn-small" data-action="openGroupManager" style="background: #6c757d; border-color: #6c757d; font-size:10px;">🗑️ Gestionar Mis Grupos</button>
+                            <span style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></span>
+                            <div id="dynamic-groups-del" style="display:inline-flex; gap:5px; flex-wrap:wrap;"></div>
+                        </div>
+                        <div class="store-list" id="list-del"></div>
+                    </div>
+                </div>
+                
+                <div class="actions-row">
+                    <button id="btn-gen-del" class="btn-generate btn-gen-red btn-gen-primary" data-action="generarDelExcelPlantillas">GENERAR DELETE MASIVO (Ctrl+Enter)</button>
+                    <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="p_del">💾 Descargar</button>
+                    <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
+                </div>
+                
+                <div id="res-excel-del" class="output-section">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin:0; flex:1; text-align:center;">Resultados</h3>
+                        <div style="display:flex; align-items: center; gap:10px;">
+                            <div class="safe-mode-toggle" style="background: none; border: none; padding: 0;">
+                                <input type="checkbox" id="cleanCopyDelPlantillas" title="Copia solo el código SQL sin comentarios">
+                                <label for="cleanCopyDelPlantillas" style="font-size: 12px; margin: 0; color: #666;">Copiar limpio</label>
+                            </div>
+                            <button class="btn-small" data-action="toggleAllAccordions" data-expanded="false" style="background:#17a2b8; border-color:#17a2b8;">📂 Abrir todos</button>
+                            <button class="btn-small" data-action="hideElement" data-target="res-excel-del" style="background:#dc3545;">🗑️ Limpiar</button>
+                        </div>
+                    </div>
+                    <div class="accordion-item"><div class="accordion-header warning">0. AUDITORÍA (Simulación)</div><div class="accordion-content show"><div class="action-bar"><button class="copy-btn" onclick="window.copyTextPlantillas('out-excel-del-audit', this, 'cleanCopyDelPlantillas')">📋 Copiar</button></div><pre class="query-box"><code class="language-sql" id="out-excel-del-audit"></code></pre></div></div>
+                    <div class="accordion-item"><div class="accordion-header" style="border-left-color: var(--theme-red);">1. SCRIPT DE BORRADO</div><div class="accordion-content"><div class="action-bar"><button class="copy-btn" onclick="window.copyTextPlantillas('out-excel-del', this, 'cleanCopyDelPlantillas')">📋 Copiar</button></div><pre class="query-box"><code class="language-sql" id="out-excel-del"></code></pre></div></div>
+                </div>
+            </div>
+
+            <div id="tab-vaciar" class="tab-content theme-section-blue">
+                <div class="info-box info-blue">
+                    <strong>Instrucciones:</strong> Escribe los códigos de las plantillas que quieres vaciar (separados por comas).
+                </div>
+                <div class="input-group">
+                    <label>Códigos de Plantilla (Ej: 1475, 3639):</label>
+                    <div class="input-wrapper">
+                        <textarea id="input-empty" placeholder="1475, 3639..."></textarea>
+                        <button class="clear-input-btn" data-action="clearInput" data-target="input-empty">✖</button>
+                    </div>
+                </div>
+                
+                <div class="actions-row">
+                    <button class="btn-generate btn-gen-blue btn-gen-primary" data-action="generarVaciarPlantillas">GENERAR VACIADO (Ctrl+Enter)</button>
+                    <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="p_vaciar">💾 Descargar</button>
+                    <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
+                </div>
+                
+                <div id="res-vaciar" class="output-section">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin:0; flex:1; text-align:center;">Resultados</h3>
+                        <div style="display:flex; align-items: center; gap:10px;">
+                            <div class="safe-mode-toggle" style="background: none; border: none; padding: 0;">
+                                <input type="checkbox" id="cleanCopyVaciarPlantillas" title="Copia solo el código SQL sin comentarios">
+                                <label for="cleanCopyVaciarPlantillas" style="font-size: 12px; margin: 0; color: #666;">Copiar limpio</label>
+                            </div>
+                            <button class="btn-small" data-action="toggleAllAccordions" data-expanded="false" style="background:#17a2b8; border-color:#17a2b8;">📂 Abrir todos</button>
+                            <button class="btn-small" data-action="hideElement" data-target="res-vaciar" style="background:#dc3545;">🗑️ Limpiar</button>
+                        </div>
+                    </div>
+                    <div class="accordion-item"><div class="accordion-header" style="border-left-color: var(--theme-blue);">1. SCRIPT DE VACIADO</div><div class="accordion-content show"><div class="action-bar"><button class="copy-btn" onclick="window.copyTextPlantillas('out-vaciar', this, 'cleanCopyVaciarPlantillas')">📋 Copiar</button></div><pre class="query-box"><code class="language-sql" id="out-vaciar"></code></pre></div></div>
+                    <div class="accordion-item"><div class="accordion-header fix">2. 🔎 COMPROBACIÓN (Debe salir vacío)</div><div class="accordion-content"><div class="action-bar"><button class="copy-btn" onclick="window.copyTextPlantillas('out-vaciar-audit', this, 'cleanCopyVaciarPlantillas')">📋 Copiar</button></div><pre class="query-box"><code class="language-sql" id="out-vaciar-audit"></code></pre></div></div>
+                </div>
+            </div>
+
+            <div id="tab-consulta" class="tab-content theme-section-orange">
+                
+                <div class="info-box info-orange" style="margin-bottom: 10px;">
+                    <strong>🔍 GENERAR CONSULTA SELECT:</strong> Vincula cabecera y detalle filtrando por proveedor y lista de clientes (situación 'A').
+                </div>
+                
+                <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                    <div style="flex: 1;">
+                        <label>ID del Proveedor (Ej: 3):</label>
+                        <div class="input-wrapper">
+                            <input type="number" id="cons-prov" placeholder="ID Prov...">
+                            <button class="clear-input-btn" data-action="clearInput" data-target="cons-prov">✖</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>IDs de Clientes (separados por comas o saltos de línea):</label>
+                    <div class="input-wrapper">
+                        <textarea id="cons-clientes" placeholder="Ej:&#10;2472&#10;51195&#10;3234"></textarea>
+                        <button class="clear-input-btn" data-action="clearInput" data-target="cons-clientes">✖</button>
+                    </div>
+                </div>
+
+                <div class="actions-row">
+                    <button class="btn-generate btn-gen-orange btn-gen-primary" data-action="generarConsultaPlantillas">GENERAR SELECT (Ctrl+Enter)</button>
+                    <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="p_cons">💾 Descargar</button>
+                    <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
+                </div>
+
+                <div id="res-consulta" class="output-section">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin:0; flex:1; text-align:center;">Resultados Select</h3>
+                        <div style="display:flex; align-items: center; gap:10px;">
+                            <div class="safe-mode-toggle" style="background: none; border: none; padding: 0;">
+                                <input type="checkbox" id="cleanCopyConsultaPlantillas" title="Copia solo el código SQL sin comentarios">
+                                <label for="cleanCopyConsultaPlantillas" style="font-size: 12px; margin: 0; color: #666;">Copiar limpio</label>
+                            </div>
+                            <button class="btn-small" data-action="hideElement" data-target="res-consulta" style="background:#dc3545;">🗑️ Limpiar</button>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <div class="accordion-header" style="border-left-color: var(--theme-orange);">CONSULTA SELECT GENERADA</div>
+                        <div class="accordion-content show">
+                            <div class="action-bar">
+                                <button class="copy-btn" onclick="window.copyTextPlantillas('out-consulta', this, 'cleanCopyConsultaPlantillas')">📋 Copiar</button>
+                            </div>
+                            <pre class="query-box"><code class="language-sql" id="out-consulta"></code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider">MODIFICAR NOMBRES MASIVAMENTE</div>
+
+                <div class="info-box" style="background: rgba(142, 68, 173, 0.1); border-left: 5px solid var(--theme-purple); color: #6c3483; margin-bottom: 10px;">
+                    <strong>✏️ ACTUALIZAR NOMBRES DESDE EXCEL:</strong> Pega tus datos desde Excel. Columnas esperadas: <code>codigo</code> (de la plantilla) y <code>nombre</code>.
+                </div>
+
+                <div class="input-group">
+                    <label>Pegar celdas de Excel:</label>
+                    <div class="input-wrapper">
+                        <textarea id="paste-upd" placeholder="codigo	nombre&#10;1475	ENRIQUE TOMÁS, S.L. (T0) - Frio&#10;3639	ENRIQUE TOMÁS, S.L. (T71) - Frio"></textarea>
+                        <button class="clear-input-btn" data-action="clearInput" data-target="paste-upd">✖</button>
+                    </div>
+                    
+                    <div id="excel-preview-box-p_upd" class="excel-preview-container">
+                        <div style="display:flex; gap:10px; margin: 10px;">
+                            <input type="text" id="search-excel-p_upd" placeholder="🔍 Buscar en previsualización..." style="flex:1; padding: 6px; font-size:13px; border:1px solid var(--border); border-radius:4px;">
+                            <button class="btn-small" style="background:#e67e22; border-color:#e67e22;" data-action="limpiarErroresExcel" data-tab="p_upd">🧹 Eliminar filas inválidas</button>
+                        </div>
+                        <table class="excel-preview-table">
+                            <thead><tr><th>Cód Plantilla</th><th>Nombre</th></tr></thead>
+                            <tbody id="excel-preview-body-p_upd"></tbody>
+                        </table>
+                        <div class="excel-pagination">
+                            <button id="btn-prev-excel-p_upd" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="-1" data-tab="p_upd">◀ Anterior</button>
+                            <span id="excel-page-info-p_upd" style="font-size:12px; color:#666;">Página 1 de 1</span>
+                            <button id="btn-next-excel-p_upd" class="excel-page-btn" data-action="cambiarPaginaExcel" data-dir="1" data-tab="p_upd">Siguiente ▶</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="actions-row">
+                    <button class="btn-generate" style="background-color: var(--theme-purple);" data-action="generarUpdateNombrePlantillas">GENERAR UPDATE MASIVO</button>
+                    <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="p_cons">💾 Descargar</button>
+                    <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
+                </div>
+
+                <div id="res-update" class="output-section">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin:0; flex:1; text-align:center;">Resultados Update</h3>
+                        <div style="display:flex; align-items: center; gap:10px;">
+                            <div class="safe-mode-toggle" style="background: none; border: none; padding: 0;">
+                                <input type="checkbox" id="cleanCopyUpdatePlantillas" title="Copia solo el código SQL sin comentarios">
+                                <label for="cleanCopyUpdatePlantillas" style="font-size: 12px; margin: 0; color: #666;">Copiar limpio</label>
+                            </div>
+                            <button class="btn-small" data-action="toggleAllAccordions" data-expanded="false" style="background:#17a2b8; border-color:#17a2b8;">📂 Abrir todos</button>
+                            <button class="btn-small" data-action="hideElement" data-target="res-update" style="background:#dc3545;">🗑️ Limpiar</button>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <div class="accordion-header" style="border-left-color: var(--theme-purple);">CONSULTA UPDATE GENERADA</div>
+                        <div class="accordion-content show">
+                            <div class="action-bar">
+                                <button class="copy-btn" onclick="window.copyTextPlantillas('out-update', this, 'cleanCopyUpdatePlantillas')">📋 Copiar</button>
+                            </div>
+                            <pre class="query-box"><code class="language-sql" id="out-update"></code></pre>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+    
+    <datalist id="group-history"></datalist>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+    
+    <script>
+        function switchApp(appId) {
+            document.querySelectorAll('.app-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-app-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('app-' + appId).classList.add('active');
+            document.getElementById('btn-nav-' + appId).classList.add('active');
+            localStorage.setItem('sqlGenActiveApp', appId);
+            if (appId === 'tpvs') document.title = '🖥️ TPVs - Suite SQL';
+            else document.title = '📄 Plantillas - Suite SQL';
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedApp = localStorage.getItem('sqlGenActiveApp') || 'tpvs';
+            switchApp(savedApp);
+        });
+
+        // Copiado desde Caché para textos largos
+        window.copyTextPlantillas = function(elementId, btn, cleanCheckboxId = null) {
+            const el = document.getElementById(elementId);
+            let text = (window.fullSqlCache && window.fullSqlCache[elementId]) ? window.fullSqlCache[elementId] : (el.dataset.fullSql || el.textContent); 
+            if (cleanCheckboxId) {
+                const checkbox = document.getElementById(cleanCheckboxId);
+                if (checkbox && checkbox.checked) {
+                    text = text.split('\n').filter(line => !line.trim().startsWith('--')).join('\n').replace(/\n\s*\n/g, '\n\n');
+                }
+            }
+            const textArea = document.createElement("textarea"); textArea.value = text;
+            textArea.style.position = "fixed"; textArea.style.left = "-9999px";
+            document.body.appendChild(textArea); textArea.focus(); textArea.select();
+            try { document.execCommand('copy'); } catch (err) {}
+            document.body.removeChild(textArea);
+            
+            let old = btn.innerText; btn.innerText = "¡Copiado! 👌"; btn.style.backgroundColor = "#28a745";
+            setTimeout(() => { btn.innerText = old; btn.style.backgroundColor = ""; }, 1500);
+        }
+    </script>
+
+    <script type="module" src="js/main.js?v=2.1"></script>
+
+</body>
+</html>

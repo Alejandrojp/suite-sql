@@ -175,24 +175,33 @@ function toggleModoPAdd() {
     let textarea = document.getElementById('paste-add');
     let thead = document.getElementById('thead-p_add');
 
-    if (modo === 'excel_tienda') {
-        wrapExcel.style.display = 'block'; wrapManual.style.display = 'none'; wrapStores.style.display = 'none';
-        label.innerText = "Pegar celdas de Excel (nº tienda, articulo, stock, proveedor):";
-        textarea.placeholder = "tienda\tarticulo\tstock\tproveedor\n71\t48727\t10\tFrio";
-        thead.innerHTML = "<tr><th>Nº Tienda</th><th>ID Artículo</th><th>Stock</th><th>Proveedor</th></tr>";
-        procesarExcel('p_add');
-    } else if (modo === 'excel_cod') {
-        wrapExcel.style.display = 'block'; wrapManual.style.display = 'none'; wrapStores.style.display = 'none';
-        label.innerText = "Pegar celdas de Excel (codigo plantilla, articulo, stock):";
-        textarea.placeholder = "codigo\tarticulo\tstock\n1475\t48727\t10";
-        thead.innerHTML = "<tr><th>Cód Plantilla</th><th>ID Artículo</th><th>Stock</th></tr>";
-        procesarExcel('p_add');
-    } else if (modo === 'manual') {
-        wrapExcel.style.display = 'none'; wrapManual.style.display = 'block'; wrapStores.style.display = 'block';
+    switch(modo) {
+        case 'excel_tienda':
+            wrapExcel.style.display = 'block'; 
+            wrapManual.style.display = 'none'; 
+            wrapStores.style.display = 'none';
+            label.innerText = "Pegar celdas de Excel (Nº Tienda, Artículo, Stock, Proveedor):";
+            textarea.placeholder = "71\t48727\t10\tFrio";
+            thead.innerHTML = "<tr><th>Nº Tienda</th><th>ID Artículo</th><th>Stock</th><th>Proveedor</th></tr>";
+            break;
+        case 'excel_cod':
+            wrapExcel.style.display = 'block'; 
+            wrapManual.style.display = 'none'; 
+            wrapStores.style.display = 'none';
+            label.innerText = "Pegar celdas de Excel (Cód. Plantilla, Artículo, Stock):";
+            textarea.placeholder = "1475\t48727\t10";
+            thead.innerHTML = "<tr><th>Cód Plantilla</th><th>ID Artículo</th><th>Stock</th></tr>";
+            break;
+        case 'manual':
+            wrapExcel.style.display = 'none'; 
+            wrapManual.style.display = 'block'; 
+            wrapStores.style.display = 'block'; // Activar selector de tiendas
+            break;
     }
+    
+    if(modo.includes('excel')) procesarExcel('p_add');
     guardarEstadoGlobal();
 }
-
 function toggleModoPDel() {
     let modo = document.querySelector('input[name="modo_p_del"]:checked')?.value || 'excel_cod';
     let wrapExcel = document.getElementById('wrap-excel-del');
@@ -468,28 +477,50 @@ function aplicarGrupoPersonalizado(containerId, idsToSelect) {
 
 function procesarPegado() {
     const containerId = document.getElementById('pasteModal').dataset.target;
-    let numbers = document.getElementById('pasteInput').value.split(/[\s,]+/).filter(n => n.trim() !== '');
-    if (numbers.length === 0) { UI.showNotification("⚠️ No se encontraron números."); return; }
+    const rawText = document.getElementById('pasteInput').value;
+    
+    const numbers = rawText.match(/\d+/g) || [];
+    
+    if (numbers.length === 0) { 
+        UI.showNotification("⚠️ No se encontraron números válidos en el texto."); 
+        return; 
+    }
 
+    const uniqueNumbers = [...new Set(numbers)];
     const container = document.getElementById(containerId);
-    let count = 0; let notFound = [];
+    let count = 0; 
+    let notFound = [];
 
-    numbers.forEach(num => {
-        const cleanNum = num.trim(); let targetId = excepcionesTiendas[cleanNum] || null; 
+    uniqueNumbers.forEach(num => {
+        const cleanNum = num.trim(); 
+        let targetId = excepcionesTiendas[cleanNum] || null; 
+        
         if (!targetId) {
             const regexTienda = new RegExp(`^${cleanNum}(\\D|$)`, 'i'); 
             const match = State.state.tiendasData.find(t => regexTienda.test(t.name) || t.id === cleanNum);
             if (match) targetId = match.id;
         }
-        if (targetId) { const cb = container.querySelector(`input[value="${targetId}"]`); if (cb && !cb.checked) { cb.checked = true; count++; } } 
-        else { notFound.push(cleanNum); }
+        
+        if (targetId) { 
+            const cb = container.querySelector(`input[value="${targetId}"]`); 
+            if (cb && !cb.checked) { 
+                cb.checked = true; 
+                count++; 
+            } 
+        } else { 
+            notFound.push(cleanNum); 
+        }
     });
 
     UI.actualizarContador(containerId, containerId.replace('list-', 'store-count-'));
     guardarEstadoGlobal();
     UI.closeModal('pasteModal');
-    if(count > 0) { UI.showNotification(`✅ Seleccionadas ${count} tiendas.` + (notFound.length > 0 ? ` (⚠️ No halladas: ${notFound.join(', ')})` : '')); } 
-    else { UI.showNotification("⚠️ No se encontraron coincidencias."); }
+    
+    if (count > 0) { 
+        UI.showNotification(`✅ Seleccionadas ${count} tiendas.` + (notFound.length > 0 ? ` (⚠️ No halladas: ${notFound.join(', ')})` : '')); 
+    } else { 
+        UI.showNotification("⚠️ No se encontraron coincidencias."); 
+    }
 }
 
 function copiarSoloIDs(containerId, btn) {
