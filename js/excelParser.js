@@ -153,18 +153,24 @@ export function parseExcelData(rawText, tab) {
 
     let conflictsFound = false;
 
+    // --- NUEVA LÓGICA DE CONFLICTOS AISLADA POR TIENDAS ---
     if (['mass', 'del'].includes(tab)) {
+        let isTiendaMode = (tab === 'mass' && document.querySelector('input[name="modo_masivo"]:checked')?.value === 'excel_tienda');
         let mapArtGrp = {};
+        
         parsedData.forEach(d => {
             if (!d.duplicate) {
-                if (!mapArtGrp[d.art]) mapArtGrp[d.art] = new Set();
-                mapArtGrp[d.art].add(d.grp);
-                if (mapArtGrp[d.art].size > 1) conflictsFound = true;
+                let conflictKey = isTiendaMode ? `${d.tienda}-${d.art}` : d.art;
+                
+                if (!mapArtGrp[conflictKey]) mapArtGrp[conflictKey] = new Set();
+                mapArtGrp[conflictKey].add(d.grp);
+                if (mapArtGrp[conflictKey].size > 1) conflictsFound = true;
             }
         });
 
         parsedData.forEach(d => {
-            if (mapArtGrp[d.art] && mapArtGrp[d.art].size > 1) d.conflict = true;
+            let conflictKey = isTiendaMode ? `${d.tienda}-${d.art}` : d.art;
+            if (mapArtGrp[conflictKey] && mapArtGrp[conflictKey].size > 1) d.conflict = true;
         });
     } else if (tab === 'swap') {
         conflictsFound = parsedData.some(d => d.conflict);
@@ -177,6 +183,7 @@ export function parseExcelData(rawText, tab) {
         duplicateCount: exactDuplicates
     };
 }
+
 /**
  * Filtra los datos y devuelve un texto limpio para repintar en el textarea
  */
