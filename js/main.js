@@ -152,6 +152,7 @@ function toggleModoMasivo() {
     let secSelectorTiendas = document.getElementById('sec-selector-tiendas-mass');
     let thead = document.getElementById('thead-mass-excel');
     let textarea = document.getElementById('articulos_excel');
+    let labelExcel = document.getElementById('label-excel-mass'); // Elemento capturado
 
     if (isExcel) { 
         secConfigGrupo.classList.add('disabled-section'); 
@@ -163,10 +164,12 @@ function toggleModoMasivo() {
 
     if (isExcelTienda) {
         if(secSelectorTiendas) secSelectorTiendas.style.display = 'none';
+        if(labelExcel) labelExcel.innerHTML = "Pega aquí las 3 columnas de tu Excel <strong>(Nº Tienda, Cód. Artículo y Grupo)</strong>.";
         textarea.placeholder = "Ejemplo:\n71\t50493\tVinos\n85\t50494\tBebidas";
         if(thead) thead.innerHTML = "<tr><th>Nº Tienda</th><th>Cód. Artículo</th><th>Grupo Detectado</th></tr>";
     } else if (modo === 'excel') {
         if(secSelectorTiendas) secSelectorTiendas.style.display = 'block';
+        if(labelExcel) labelExcel.innerHTML = "Pega aquí las 2 columnas de tu Excel <strong>(Cód. Artículo y Grupo)</strong>.";
         textarea.placeholder = "Ejemplo:\n50493\tVinos\n50494\tBebidas";
         if(thead) thead.innerHTML = "<tr><th>Cód. Artículo</th><th>Grupo Detectado</th></tr>";
     } else {
