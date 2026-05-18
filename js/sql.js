@@ -63,24 +63,49 @@ function wrapTransactionPlantillas(sql) {
 
 export function generarSQLMasivo() {
     try {
-        let isExcel = document.querySelector('input[name="modo_masivo"]:checked').value === 'excel';
+        let modoMasivo = document.querySelector('input[name="modo_masivo"]:checked').value;
+        let isExcel = modoMasivo === 'excel' || modoMasivo === 'excel_tienda';
+        let isExcelTienda = modoMasivo === 'excel_tienda';
+        
         let listaArticulos = [];
         let datosExcel = [];
+        let listaTiendas = [];
 
         if (isExcel) {
             let validData = state.excel.mass.data.filter(d => d.valid && !d.conflict);
             if(validData.length === 0) { showNotification("¡Faltan artículos válidos o hay conflictos sin resolver!"); return; }
-            datosExcel = validData.map(d => ({ idArticulo: safeInt(d.art), grupo: d.grp }));
-            listaArticulos = [...new Set(validData.map(d => safeInt(d.art)))]; 
+            
+            if (isExcelTienda) {
+                let mappedTiendas = new Set();
+                validData.forEach(d => {
+                    let cleanNum = d.tienda.toString().trim();
+                    let dbId = excepcionesTiendas[cleanNum] || null;
+                    if (!dbId) {
+                        const regexTienda = new RegExp(`^${cleanNum}(\\D|$)`, 'i');
+                        const match = state.tiendasData.find(t => regexTienda.test(t.name) || t.id === cleanNum);
+                        if (match) dbId = match.id;
+                        else dbId = safeInt(cleanNum);
+                    }
+                    mappedTiendas.add(dbId);
+                    datosExcel.push({ idTienda: dbId, idArticulo: safeInt(d.art), grupo: d.grp });
+                });
+                listaTiendas = Array.from(mappedTiendas);
+                listaArticulos = [...new Set(datosExcel.map(d => d.idArticulo))];
+            } else {
+                datosExcel = validData.map(d => ({ idArticulo: safeInt(d.art), grupo: d.grp }));
+                listaArticulos = [...new Set(datosExcel.map(d => d.idArticulo))];
+            }
         } else {
             let textArticulos = document.getElementById('articulos').value;
             listaArticulos = textArticulos.split(/[\r\n,]+/).map(s => s.replace(/\D/g,'')).filter(s => s !== '').map(a => safeInt(a));
             if (listaArticulos.length === 0) { showNotification("¡Faltan los artículos!"); return; }
         }
 
-        const checkedBoxes = document.querySelectorAll('#list-mass .store-item input:checked');
-        let listaTiendas = Array.from(checkedBoxes).map(cb => safeInt(cb.value));
-        if (listaTiendas.length === 0) { showNotification("¡Selecciona tiendas!"); return; }
+        if (!isExcelTienda) {
+            const checkedBoxes = document.querySelectorAll('#list-mass .store-item input:checked');
+            listaTiendas = Array.from(checkedBoxes).map(cb => safeInt(cb.value));
+            if (listaTiendas.length === 0) { showNotification("¡Selecciona tiendas!"); return; }
+        }
 
         let busq1 = document.getElementById('busq1').value.trim();
         if(!isExcel && !busq1) {
@@ -112,12 +137,22 @@ export function generarSQLMasivo() {
 
             datosExcel.forEach((d, index) => {
                 let gEsc = sqlEscape(processTxt(d.grupo));
-                if (index === 0) {
-                    unionAll += `    SELECT CAST('${d.idArticulo}' AS CHAR(50)) as idArticulo, CAST('${gEsc}' AS CHAR(100)) as Busq1, CAST('%' AS CHAR(100)) as Busq2`;
-                    unionSimple += `    SELECT CAST('${d.idArticulo}' AS CHAR(50)) as idArticulo`;
+                if (isExcelTienda) {
+                    if (index === 0) {
+                        unionAll += `    SELECT CAST('${d.idTienda}' AS CHAR(50)) as idRestaurante, CAST('${d.idArticulo}' AS CHAR(50)) as idArticulo, CAST('${gEsc}' AS CHAR(100)) as Busq1, CAST('%' AS CHAR(100)) as Busq2`;
+                        unionSimple += `    SELECT CAST('${d.idTienda}' AS CHAR(50)) as idRestaurante, CAST('${d.idArticulo}' AS CHAR(50)) as idArticulo`;
+                    } else {
+                        unionAll += `\n    UNION ALL SELECT '${d.idTienda}', '${d.idArticulo}', '${gEsc}', '%'`;
+                        unionSimple += `\n    UNION ALL SELECT '${d.idTienda}', '${d.idArticulo}'`;
+                    }
                 } else {
-                    unionAll += `\n    UNION ALL SELECT '${d.idArticulo}', '${gEsc}', '%'`;
-                    unionSimple += `\n    UNION ALL SELECT '${d.idArticulo}'`;
+                    if (index === 0) {
+                        unionAll += `    SELECT CAST('${d.idArticulo}' AS CHAR(50)) as idArticulo, CAST('${gEsc}' AS CHAR(100)) as Busq1, CAST('%' AS CHAR(100)) as Busq2`;
+                        unionSimple += `    SELECT CAST('${d.idArticulo}' AS CHAR(50)) as idArticulo`;
+                    } else {
+                        unionAll += `\n    UNION ALL SELECT '${d.idArticulo}', '${gEsc}', '%'`;
+                        unionSimple += `\n    UNION ALL SELECT '${d.idArticulo}'`;
+                    }
                 }
             });
         } else {
@@ -148,10 +183,19 @@ export function generarSQLMasivo() {
             undoWhere = `AND EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSQL} ${compareOp} ListadoGrupos.Busq1)`;
         }
 
+        // Variaciones de JOIN si usamos matriz cruzada o lista exacta (Excel Tienda)
+        let fromJoin1 = isExcelTienda ? `FROM maeres R \nINNER JOIN (${unionAll}) ListadoMasivo ON R.codigo = ListadoMasivo.idRestaurante` : `FROM maeres R \nCROSS JOIN (${unionAll}) ListadoMasivo`;
+        let fromJoin2 = isExcelTienda ? `FROM maeres R \nINNER JOIN (${unionAll}) Listado ON R.codigo = Listado.idRestaurante` : `FROM maeres R \nCROSS JOIN (${unionAll}) Listado`;
+        let fromJoin5 = isExcelTienda ? `FROM maeres R \nINNER JOIN (${unionSimple}) ListaIdeal ON R.codigo = ListaIdeal.idRestaurante` : `FROM maeres R \nCROSS JOIN (${unionSimple}) ListaIdeal`;
+
         state.generatedQueries.mq0 = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \n${deleteWhere} \nAND MA.situacion = 'B';`;
-        state.generatedQueries.mq1 = `SELECT R.codigo, R.nombre, ListadoMasivo.idArticulo, G.nombre, G.idGrupo, MA.situacion \nFROM maeres R \nCROSS JOIN (${unionAll}) ListadoMasivo \nINNER JOIN fo_grupos G ON G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = ListadoMasivo.idArticulo AND MA.empresa = R.empresa \nWHERE ${campoSQL} LIKE ListadoMasivo.Busq1 AND ${campoSQL} LIKE ListadoMasivo.Busq2 \nAND R.codigo IN (${strTiendas}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = ListadoMasivo.idArticulo AND D.idGrupo = G.idGrupo) \nORDER BY R.codigo, ListadoMasivo.idArticulo;`;
-        state.generatedQueries.mq2 = `INSERT INTO fo_desglose (idRestaurante, idEmpresa, idGrupo, idArticulo) \nSELECT R.codigo, R.empresa, G.idGrupo, Listado.idArticulo \nFROM maeres R \nCROSS JOIN (${unionAll}) Listado \nINNER JOIN fo_grupos G ON G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = Listado.idArticulo AND MA.empresa = R.empresa \nWHERE ${campoSQL} LIKE Listado.Busq1 AND ${campoSQL} LIKE Listado.Busq2 \nAND R.codigo IN (${strTiendas}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = Listado.idArticulo AND D.idGrupo = G.idGrupo);`;
+        
+        state.generatedQueries.mq1 = `SELECT R.codigo, R.nombre, ListadoMasivo.idArticulo, G.nombre, G.idGrupo, MA.situacion \n${fromJoin1} \nINNER JOIN fo_grupos G ON G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = ListadoMasivo.idArticulo AND MA.empresa = R.empresa \nWHERE ${campoSQL} LIKE ListadoMasivo.Busq1 AND ${campoSQL} LIKE ListadoMasivo.Busq2 \nAND R.codigo IN (${strTiendas}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = ListadoMasivo.idArticulo AND D.idGrupo = G.idGrupo) \nORDER BY R.codigo, ListadoMasivo.idArticulo;`;
+        
+        state.generatedQueries.mq2 = `INSERT INTO fo_desglose (idRestaurante, idEmpresa, idGrupo, idArticulo) \nSELECT R.codigo, R.empresa, G.idGrupo, Listado.idArticulo \n${fromJoin2} \nINNER JOIN fo_grupos G ON G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = Listado.idArticulo AND MA.empresa = R.empresa \nWHERE ${campoSQL} LIKE Listado.Busq1 AND ${campoSQL} LIKE Listado.Busq2 \nAND R.codigo IN (${strTiendas}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = Listado.idArticulo AND D.idGrupo = G.idGrupo);`;
+        
         state.generatedQueries.mq3 = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendas}) \n        ${reorderWhere} \n        AND MA.situacion <> 'B' \n        ORDER BY \n            D.idRestaurante, D.idEmpresa, D.idGrupo, \n            CASE WHEN D.idArticulo IN (${listaIn}) THEN 0 ELSE 1 END ASC, \n            CASE D.idArticulo \n${caseUpdate} \n            END ASC, \n            COALESCE(D.orden, 999999) ASC, \n            D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) TablaOrdenada, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden;`;
+        
         state.generatedQueries.mq4 = `SELECT R.codigo, R.nombre, G.nombre, G.idGrupo, D.idArticulo, D.orden, MA.situacion \nFROM maeres R \nINNER JOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nLEFT JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE D.idArticulo IN (${listaIn}) \nAND R.codigo IN (${strTiendas}) \nORDER BY R.codigo, G.nombre, D.orden;`;
         
         let auditEspecifico = document.getElementById('auditGrupoEspecifico') && document.getElementById('auditGrupoEspecifico').checked;
@@ -162,9 +206,9 @@ export function generarSQLMasivo() {
         if (isExcel) { auditWhere = `WHERE EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSub} ${opAuditoria} ListadoGrupos.Busq1)`; }
 
         if (auditEspecifico) {
-            state.generatedQueries.mq5 = `SELECT R.codigo as 'Nº Tienda', R.nombre as Tienda, ListaIdeal.idArticulo as Código, MA.descripcion_principal as Descripción, F.nombre as Familia, S.nombre as Subfamilia, COALESCE(D.nombre_grupo, '---') as Grupo, D.idGrupo, CASE WHEN D.idArticulo IS NOT NULL THEN 'OK' ELSE 'FALTA' END as Estado, MA.situacion \nFROM maeres R \nCROSS JOIN (${unionSimple}) ListaIdeal \nLEFT JOIN ( \n    SELECT D2.idRestaurante, D2.idEmpresa, D2.idArticulo, D2.idGrupo, G2.nombre as nombre_grupo \n    FROM fo_desglose D2 \n    INNER JOIN fo_grupos G2 ON G2.idGrupo = D2.idGrupo AND G2.idRestaurante = D2.idRestaurante AND G2.idEmpresa = D2.idEmpresa \n    ${auditWhere} \n) D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa AND D.idArticulo = ListaIdeal.idArticulo \nLEFT JOIN maeart MA ON MA.codigo = ListaIdeal.idArticulo AND MA.empresa = R.empresa \nLEFT JOIN desfam F ON F.codigo = MA.familia AND F.empresa = MA.empresa AND F.idioma = 1 \nLEFT JOIN dessub S ON S.codigo = MA.subfamilia AND S.empresa = MA.empresa AND S.idioma = 1 \nWHERE R.codigo IN (${strTiendas}) \nORDER BY Estado ASC, R.codigo, ListaIdeal.idArticulo;`;
+            state.generatedQueries.mq5 = `SELECT R.codigo as 'Nº Tienda', R.nombre as Tienda, ListaIdeal.idArticulo as Código, MA.descripcion_principal as Descripción, F.nombre as Familia, S.nombre as Subfamilia, COALESCE(D.nombre_grupo, '---') as Grupo, D.idGrupo, CASE WHEN D.idArticulo IS NOT NULL THEN 'OK' ELSE 'FALTA' END as Estado, MA.situacion \n${fromJoin5} \nLEFT JOIN ( \n    SELECT D2.idRestaurante, D2.idEmpresa, D2.idArticulo, D2.idGrupo, G2.nombre as nombre_grupo \n    FROM fo_desglose D2 \n    INNER JOIN fo_grupos G2 ON G2.idGrupo = D2.idGrupo AND G2.idRestaurante = D2.idRestaurante AND G2.idEmpresa = D2.idEmpresa \n    ${auditWhere} \n) D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa AND D.idArticulo = ListaIdeal.idArticulo \nLEFT JOIN maeart MA ON MA.codigo = ListaIdeal.idArticulo AND MA.empresa = R.empresa \nLEFT JOIN desfam F ON F.codigo = MA.familia AND F.empresa = MA.empresa AND F.idioma = 1 \nLEFT JOIN dessub S ON S.codigo = MA.subfamilia AND S.empresa = MA.empresa AND S.idioma = 1 \nWHERE R.codigo IN (${strTiendas}) \nORDER BY Estado ASC, R.codigo, ListaIdeal.idArticulo;`;
         } else {
-            state.generatedQueries.mq5 = `SELECT R.codigo as 'Nº Tienda', R.nombre as Tienda, ListaIdeal.idArticulo as Código, MA.descripcion_principal as Descripción, F.nombre as Familia, S.nombre as Subfamilia, COALESCE(G.nombre, '---') as Grupo, G.idGrupo, CASE WHEN D.idArticulo IS NOT NULL THEN 'OK' ELSE 'FALTA' END as Estado, MA.situacion \nFROM maeres R \nCROSS JOIN (${unionSimple}) ListaIdeal \nLEFT JOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa AND D.idArticulo = ListaIdeal.idArticulo \nLEFT JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nLEFT JOIN maeart MA ON MA.codigo = ListaIdeal.idArticulo AND MA.empresa = R.empresa \nLEFT JOIN desfam F ON F.codigo = MA.familia AND F.empresa = MA.empresa AND F.idioma = 1 \nLEFT JOIN dessub S ON S.codigo = MA.subfamilia AND S.empresa = MA.empresa AND S.idioma = 1 \nWHERE R.codigo IN (${strTiendas}) \nORDER BY Estado ASC, R.codigo, ListaIdeal.idArticulo;`;
+            state.generatedQueries.mq5 = `SELECT R.codigo as 'Nº Tienda', R.nombre as Tienda, ListaIdeal.idArticulo as Código, MA.descripcion_principal as Descripción, F.nombre as Familia, S.nombre as Subfamilia, COALESCE(G.nombre, '---') as Grupo, G.idGrupo, CASE WHEN D.idArticulo IS NOT NULL THEN 'OK' ELSE 'FALTA' END as Estado, MA.situacion \n${fromJoin5} \nLEFT JOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa AND D.idArticulo = ListaIdeal.idArticulo \nLEFT JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nLEFT JOIN maeart MA ON MA.codigo = ListaIdeal.idArticulo AND MA.empresa = R.empresa \nLEFT JOIN desfam F ON F.codigo = MA.familia AND F.empresa = MA.empresa AND F.idioma = 1 \nLEFT JOIN dessub S ON S.codigo = MA.subfamilia AND S.empresa = MA.empresa AND S.idioma = 1 \nWHERE R.codigo IN (${strTiendas}) \nORDER BY Estado ASC, R.codigo, ListaIdeal.idArticulo;`;
         }
         
         state.generatedQueries.mq6 = `DELETE D FROM fo_desglose D \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \nWHERE D.idRestaurante IN (${strTiendas}) \nAND D.idArticulo IN (${listaIn}) \n${undoWhere};`;

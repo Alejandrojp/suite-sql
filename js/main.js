@@ -141,12 +141,37 @@ function switchTab(tabId) {
 }
 
 function toggleModoMasivo() {
-    let isExcel = document.querySelector('input[name="modo_masivo"]:checked').value === 'excel';
+    let modo = document.querySelector('input[name="modo_masivo"]:checked').value;
+    let isExcel = modo.includes('excel');
+    let isExcelTienda = modo === 'excel_tienda';
+
     document.getElementById('wrap-modo-simple-mass').style.display = isExcel ? 'none' : 'block';
     document.getElementById('wrap-modo-excel-mass').style.display = isExcel ? 'block' : 'none';
+    
     let secConfigGrupo = document.getElementById('sec-config-grupo-mass');
-    if (isExcel) { secConfigGrupo.classList.add('disabled-section'); procesarExcel('mass'); } 
-    else { secConfigGrupo.classList.remove('disabled-section'); UI.actualizarContadorArticulosGenerico('articulos', 'art-count-mass'); }
+    let secSelectorTiendas = document.getElementById('sec-selector-tiendas-mass');
+    let thead = document.getElementById('thead-mass-excel');
+    let textarea = document.getElementById('articulos_excel');
+
+    if (isExcel) { 
+        secConfigGrupo.classList.add('disabled-section'); 
+        procesarExcel('mass'); 
+    } else { 
+        secConfigGrupo.classList.remove('disabled-section'); 
+        UI.actualizarContadorArticulosGenerico('articulos', 'art-count-mass'); 
+    }
+
+    if (isExcelTienda) {
+        if(secSelectorTiendas) secSelectorTiendas.style.display = 'none';
+        textarea.placeholder = "Ejemplo:\n71\t50493\tVinos\n85\t50494\tBebidas";
+        if(thead) thead.innerHTML = "<tr><th>Nº Tienda</th><th>Cód. Artículo</th><th>Grupo Detectado</th></tr>";
+    } else if (modo === 'excel') {
+        if(secSelectorTiendas) secSelectorTiendas.style.display = 'block';
+        textarea.placeholder = "Ejemplo:\n50493\tVinos\n50494\tBebidas";
+        if(thead) thead.innerHTML = "<tr><th>Cód. Artículo</th><th>Grupo Detectado</th></tr>";
+    } else {
+        if(secSelectorTiendas) secSelectorTiendas.style.display = 'block';
+    }
 }
 
 function toggleModoBorrar() {

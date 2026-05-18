@@ -1,5 +1,3 @@
-// js/excelParser.js
-
 export function parseExcelData(rawText, tab) {
     let val = rawText.trim();
     
@@ -33,27 +31,48 @@ export function parseExcelData(rawText, tab) {
             
             // --- LOGICA TPVs ---
             if (['mass', 'del', 'swap'].includes(tab)) {
-                if (parts.length >= 2) {
-                    let col1 = parts[0];
-                    let col2 = parts[1];
-                    
-                    if (isNaN(col1) || col1 === '') { errors = true; } 
-                    else {
-                        let exactKey = col1 + '-' + col2;
-                        let isExactDuplicate = seenExact.has(exactKey);
-                        seenExact.add(exactKey);
-                        if (isExactDuplicate) exactDuplicates++;
+                let modoMasivo = tab === 'mass' ? document.querySelector('input[name="modo_masivo"]:checked')?.value : null;
 
-                        let isValid = (col1.length >= 4 && col1.length <= 6);
+                if (modoMasivo === 'excel_tienda') {
+                    if (parts.length >= 3) {
+                        let colTienda = parts[0];
+                        let colArt = parts[1];
+                        let colGrp = parts[2];
                         
-                        if (tab === 'swap') {
-                            parsedData.push({ oldId: col1, newId: col2, valid: isValid, conflict: false, duplicate: isExactDuplicate });
-                        } else {
-                            parsedData.push({ art: col1, grp: col2, valid: isValid, conflict: false, duplicate: isExactDuplicate });
+                        if (colTienda !== '' && !isNaN(colArt) && colArt !== '') {
+                            let exactKey = colTienda + '-' + colArt + '-' + colGrp;
+                            let isExactDuplicate = seenExact.has(exactKey);
+                            seenExact.add(exactKey);
+                            if (isExactDuplicate) exactDuplicates++;
+
+                            let isValid = (colArt.length >= 4 && colArt.length <= 6);
+                            parsedData.push({ tienda: colTienda, art: colArt, grp: colGrp, valid: isValid, conflict: false, duplicate: isExactDuplicate });
+                            if (!isValid) errors = true;
+                        } else { errors = true; }
+                    } else { errors = true; }
+                } else {
+                    if (parts.length >= 2) {
+                        let col1 = parts[0];
+                        let col2 = parts[1];
+                        
+                        if (isNaN(col1) || col1 === '') { errors = true; } 
+                        else {
+                            let exactKey = col1 + '-' + col2;
+                            let isExactDuplicate = seenExact.has(exactKey);
+                            seenExact.add(exactKey);
+                            if (isExactDuplicate) exactDuplicates++;
+
+                            let isValid = (col1.length >= 4 && col1.length <= 6);
+                            
+                            if (tab === 'swap') {
+                                parsedData.push({ oldId: col1, newId: col2, valid: isValid, conflict: false, duplicate: isExactDuplicate });
+                            } else {
+                                parsedData.push({ art: col1, grp: col2, valid: isValid, conflict: false, duplicate: isExactDuplicate });
+                            }
+                            if (!isValid) errors = true;
                         }
-                        if (!isValid) errors = true;
-                    }
-                } else { errors = true; }
+                    } else { errors = true; }
+                }
             } 
             
             // --- LOGICA PLANTILLAS ---
@@ -162,6 +181,11 @@ export function parseExcelData(rawText, tab) {
  * Filtra los datos y devuelve un texto limpio para repintar en el textarea
  */
 export function generateCleanExcelText(data, tab) {
+    if (tab === 'mass') {
+        let modo = document.querySelector('input[name="modo_masivo"]:checked')?.value;
+        if (modo === 'excel_tienda') return data.map(d => `${d.tienda}\t${d.art}\t${d.grp}`).join('\n');
+    }
+    
     if (tab === 'swap') return data.map(d => `${d.oldId}\t${d.newId}`).join('\n');
     
     if (tab === 'p_add') {

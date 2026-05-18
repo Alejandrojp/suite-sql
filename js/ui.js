@@ -160,7 +160,6 @@ export function openModal(id) {
     document.getElementById(id).style.display = "flex";
 }
 
-// --- RENDERIZADO DE TABLAS EXCEL ---
 export function renderPreviewTable(tab) {
     let tbodyId = tab === 'mass' ? 'excel-preview-body-mass' : (tab === 'del' ? 'excel-preview-body-del' : 'excel-preview-body-swap');
     let infoId = tab === 'mass' ? 'excel-page-info-mass' : (tab === 'del' ? 'excel-page-info-del' : 'excel-page-info-swap');
@@ -186,6 +185,14 @@ export function renderPreviewTable(tab) {
             if (tab === 'p_add') return (d.cod && d.cod.includes(state.excel[tab].search)) || (d.tienda && d.tienda.includes(state.excel[tab].search)) || d.art.includes(state.excel[tab].search) || d.prov?.toLowerCase().includes(state.excel[tab].search);
             if (tab === 'p_del') return (d.cod && d.cod.includes(state.excel[tab].search)) || (d.tienda && d.tienda.includes(state.excel[tab].search)) || d.art.includes(state.excel[tab].search) || d.prov?.toLowerCase().includes(state.excel[tab].search);
             if (tab === 'p_upd') return d.cod.includes(state.excel[tab].search) || d.nombre.toLowerCase().includes(state.excel[tab].search);
+            
+            // Nueva lógica de búsqueda para TPV -> Excel Varias Tiendas
+            let isTiendaMode = tab === 'mass' && document.querySelector('input[name="modo_masivo"]:checked')?.value === 'excel_tienda';
+            if (isTiendaMode) {
+                return d.art.toLowerCase().includes(state.excel[tab].search) || 
+                       d.grp.toLowerCase().includes(state.excel[tab].search) || 
+                       (d.tienda && d.tienda.toLowerCase().includes(state.excel[tab].search));
+            }
             
             return d.art.toLowerCase().includes(state.excel[tab].search) || d.grp.toLowerCase().includes(state.excel[tab].search);
         });
@@ -230,8 +237,14 @@ export function renderPreviewTable(tab) {
         
         // Render TPV
         if (['mass', 'del'].includes(tab)) {
+            let isTiendaMode = tab === 'mass' && document.querySelector('input[name="modo_masivo"]:checked')?.value === 'excel_tienda';
             let styleArt = row.valid ? '' : 'color:red; font-weight:bold;';
-            tr.innerHTML = `<td style="font-family: monospace; ${styleArt} ${styleRow}">${safeArt} ${icons}</td><td style="${styleRow}">${safeGrp}</td>`;
+            
+            if (isTiendaMode) {
+                tr.innerHTML = `<td style="${styleRow}">${escapeHTML(row.tienda)}</td><td style="font-family: monospace; ${styleArt} ${styleRow}">${safeArt} ${icons}</td><td style="${styleRow}">${safeGrp}</td>`;
+            } else {
+                tr.innerHTML = `<td style="font-family: monospace; ${styleArt} ${styleRow}">${safeArt} ${icons}</td><td style="${styleRow}">${safeGrp}</td>`;
+            }
         } else if (tab === 'swap') {
             let styleCol1 = (row.oldId && row.oldId.length >= 4 && row.oldId.length <= 6) ? '' : 'color:red; font-weight:bold;';
             let styleCol2 = (row.newId && row.newId.length >= 4 && row.newId.length <= 6) ? '' : 'color:red; font-weight:bold;';
