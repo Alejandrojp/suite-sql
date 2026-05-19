@@ -5,6 +5,44 @@ import * as UI from './ui.js';
 import * as SQL from './sql.js';
 import * as Parser from './excelParser.js';
 
+// --- UTILIDAD DE DEBOUNCE PARA AUTOGUARDADO ---
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+const guardadoReactivo = debounce(() => {
+    guardarEstadoGlobal();
+}, 500);
+
+// --- EJECUCIÓN ASÍNCRONA PARA NO BLOQUEAR LA UI ---
+function ejecutarGeneracionAsincrona(btn, taskFn) {
+    const originalText = btn.innerText;
+    
+    // 1. Mostrar estado de carga
+    btn.innerText = "⏳ Generando SQL...";
+    btn.disabled = true;
+    document.body.style.cursor = 'wait';
+
+    // 2. Ceder el hilo al navegador para pintar la UI y ejecutar la tarea pesada
+    setTimeout(() => {
+        try {
+            taskFn();
+        } catch (error) {
+            console.error("Error en generación asíncrona:", error);
+            UI.showNotification("⚠️ Error generando el script. Revisa la consola.");
+        } finally {
+            // 3. Restaurar estado
+            btn.innerText = originalText;
+            btn.disabled = false;
+            document.body.style.cursor = 'default';
+        }
+    }, 50);
+}
+
 // ==========================================
 // 1. GESTIÓN DE ESTADO LOCAL (Formulario)
 // ==========================================
@@ -154,7 +192,7 @@ function toggleModoMasivo() {
     let secSelectorTiendas = document.getElementById('sec-selector-tiendas-mass');
     let thead = document.getElementById('thead-mass-excel');
     let textarea = document.getElementById('articulos_excel');
-    let labelExcel = document.getElementById('label-excel-mass'); // Elemento capturado
+    let labelExcel = document.getElementById('label-excel-mass'); 
 
     if (isExcel) { 
         secConfigGrupo.classList.add('disabled-section'); 
@@ -225,13 +263,14 @@ function toggleModoPAdd() {
         case 'manual':
             wrapExcel.style.display = 'none'; 
             wrapManual.style.display = 'block'; 
-            wrapStores.style.display = 'block'; // Activar selector de tiendas
+            wrapStores.style.display = 'block'; 
             break;
     }
     
     if(modo.includes('excel')) procesarExcel('p_add');
     guardarEstadoGlobal();
 }
+
 function toggleModoPDel() {
     let modo = document.querySelector('input[name="modo_p_del"]:checked')?.value || 'excel_cod';
     let wrapExcel = document.getElementById('wrap-excel-del');
@@ -735,6 +774,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     window.addEventListener('scroll', UI.handleFloatingScrollButton);
     UI.handleFloatingScrollButton();
+
+    // Sincronización cruzada entre pestañas del navegador
     window.addEventListener('storage', (e) => {
         if (e.key === 'sqlGenState') {
             cargarEstadoFormulario();
@@ -785,12 +826,12 @@ document.addEventListener('click', (e) => {
         case 'addNewStoreRow': addStoreEditorRow(); document.querySelector('.editor-table-container').scrollTop = 9999; break;
         case 'restaurarTiendasOriginales': 
             if(confirm("¿Volver a original?")) { 
-        State.restaurarTiendasOriginales(); 
-        State.cargarTiendas(defaultTiendasData); 
-        repintarTodasLasListasDeTiendas();       
-        UI.showNotification("✅ Tiendas restauradas al estado original.");
-        } 
-        break;
+                State.restaurarTiendasOriginales(); 
+                State.cargarTiendas(defaultTiendasData); 
+                repintarTodasLasListasDeTiendas();       
+                UI.showNotification("✅ Tiendas restauradas al estado original.");
+            } 
+            break;
         case 'guardarTiendasEditadas': guardarTiendasEditadas(); break;
         case 'convertirNumerosAIds': convertirNumerosAIds(); break;
         case 'openGroupManager': openGroupManager(); break;
@@ -817,40 +858,48 @@ document.addEventListener('click', (e) => {
         case 'addSwapRow': addSwapRow(); break;
         case 'removeSwapRow': btn.closest('tr').remove(); guardarEstadoGlobal(); actualizarBadgeSwap(); break;
 
-        // Generadores
-        case 'generarSQLMasivo': SQL.generarSQLMasivo(); break;
-        case 'generarSQLBorrar': SQL.generarSQLBorrar(); break;
-        case 'generarSQLSwap': SQL.generarSQLSwap(); break;
-        case 'generarSQLReparar': SQL.generarSQLReparar(); break;
+        // --- GENERADORES ASÍNCRONOS ---
+        case 'generarSQLMasivo': ejecutarGeneracionAsincrona(btn, () => SQL.generarSQLMasivo()); break;
+        case 'generarSQLBorrar': ejecutarGeneracionAsincrona(btn, () => SQL.generarSQLBorrar()); break;
+        case 'generarSQLSwap': ejecutarGeneracionAsincrona(btn, () => SQL.generarSQLSwap()); break;
+        case 'generarSQLReparar': ejecutarGeneracionAsincrona(btn, () => SQL.generarSQLReparar()); break;
         
-        case 'generarAddPlantillas': SQL.generarAddPlantillas(); break;
-        case 'generarDelExcelPlantillas': SQL.generarDelExcelPlantillas(); break;
+        case 'generarAddPlantillas': ejecutarGeneracionAsincrona(btn, () => SQL.generarAddPlantillas()); break;
+        case 'generarDelExcelPlantillas': ejecutarGeneracionAsincrona(btn, () => SQL.generarDelExcelPlantillas()); break;
         case 'generarVaciarPlantillas': 
-            let codigosRaw = document.getElementById('input-empty').value.match(/\d+/g) || [];
-            let resultado = SQL.generarVaciarPlantillas(codigosRaw);
-            
-            if (resultado.error) {
-                UI.showNotification(resultado.error);
-            } else {
-                SQL.inyectarSQLPlantillas('res-vaciar', 'out-vaciar', resultado.sql);
-                SQL.inyectarSQLPlantillas('res-vaciar', 'out-vaciar-audit', resultado.auditSql);
-                UI.showNotification("✅ Consulta de vaciado generada.");
-            }
+            ejecutarGeneracionAsincrona(btn, () => {
+                let codigosRaw = document.getElementById('input-empty').value.match(/\d+/g) || [];
+                let resultado = SQL.generarVaciarPlantillas(codigosRaw);
+                
+                if (resultado.error) {
+                    UI.showNotification(resultado.error);
+                } else {
+                    SQL.inyectarSQLPlantillas('res-vaciar', 'out-vaciar', resultado.sql);
+                    SQL.inyectarSQLPlantillas('res-vaciar', 'out-vaciar-audit', resultado.auditSql);
+                    UI.showNotification("✅ Consulta de vaciado generada.");
+                }
+            });
             break;
-        case 'generarUpdateNombrePlantillas': SQL.generarUpdateNombrePlantillas(); break;
-        case 'generarConsultaPlantillas': SQL.generarConsultaPlantillas(); break;
+        case 'generarUpdateNombrePlantillas': ejecutarGeneracionAsincrona(btn, () => SQL.generarUpdateNombrePlantillas()); break;
+        case 'generarConsultaPlantillas': ejecutarGeneracionAsincrona(btn, () => SQL.generarConsultaPlantillas()); break;
     }
 });
 
 document.addEventListener('input', (e) => {
+    // Redimensionamiento de textareas
     if (e.target.tagName && e.target.tagName.toLowerCase() === 'textarea') {
         e.target.style.height = 'auto';
         e.target.style.height = (e.target.scrollHeight) + 'px';
     }
 
+    // Autoguardado reactivo con Debounce para inputs de texto
+    if (e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && (e.target.type === 'text' || e.target.type === 'number'))) {
+        guardadoReactivo();
+    }
+
     const id = e.target.id;
-    if (id === 'articulos') { UI.actualizarContadorArticulosGenerico('articulos', 'art-count-mass'); guardarEstadoGlobal(); }
-    if (id === 'articulos_borrar') { UI.actualizarContadorArticulosGenerico('articulos_borrar', 'art-count-del'); guardarEstadoGlobal(); }
+    if (id === 'articulos') { UI.actualizarContadorArticulosGenerico('articulos', 'art-count-mass'); }
+    if (id === 'articulos_borrar') { UI.actualizarContadorArticulosGenerico('articulos_borrar', 'art-count-del'); }
     
     if (id === 'articulos_excel') { procesarExcel('mass'); guardarEstadoGlobal(); }
     if (id === 'articulos_excel_del') { procesarExcel('del'); guardarEstadoGlobal(); }
@@ -860,8 +909,7 @@ document.addEventListener('input', (e) => {
     if (id === 'paste-del') { procesarExcel('p_del'); guardarEstadoGlobal(); }
     if (id === 'paste-upd') { procesarExcel('p_upd'); guardarEstadoGlobal(); }
 
-    if (id && (id.startsWith('busq') || id.startsWith('prov-nombre'))) guardarEstadoGlobal();
-    if (e.target.classList && e.target.classList.contains('swap-input')) { guardarEstadoGlobal(); actualizarBadgeSwap(); }
+    if (e.target.classList && e.target.classList.contains('swap-input')) { actualizarBadgeSwap(); }
     if (e.target.classList && e.target.classList.contains('editor-input')) { e.target.style.borderColor=''; e.target.style.backgroundColor=''; }
 });
 
@@ -873,10 +921,12 @@ document.addEventListener('change', (e) => {
     if (e.target.name === 'modo_borrar') toggleModoBorrar();
     if (e.target.name === 'modo_swap') toggleModoSwap();
     if (e.target.name === 'posicion_insercion') guardarEstadoGlobal();
+    
     if (e.target.id === 'tipoBusqueda') { UI.gestionarInputsBusqueda('tipoBusqueda', 'busq2'); guardarEstadoGlobal(); }
     if (e.target.id === 'tipoBusqueda_del') { UI.gestionarInputsBusqueda('tipoBusqueda_del', 'busq2_del'); guardarEstadoGlobal(); }
     if (e.target.id === 'tipoBusqueda_swap') { UI.gestionarInputsBusqueda('tipoBusqueda_swap', 'busq2_swap'); guardarEstadoGlobal(); }
     if (e.target.id === 'tipoBusqueda_repair') { UI.gestionarInputsBusqueda('tipoBusqueda_repair', 'busq2_repair'); guardarEstadoGlobal(); }
+    
     if (['auditGrupoEspecifico', 'auditGrupoEspecificoSwap', 'safeMode', 'safeModePlant', 'campoBusqueda', 'campoBusqueda_del', 'campoBusqueda_swap', 'campoBusqueda_repair'].includes(e.target.id)) guardarEstadoGlobal();
 });
 
@@ -950,6 +1000,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'Enter') { 
+        // El click dispara ahora la ejecución asíncrona configurada en el delegador
         const btn = document.querySelector('.app-section.active .tab-content.active .btn-generate:not(.btn-secondary)'); 
         if(btn) btn.click(); 
         return; 

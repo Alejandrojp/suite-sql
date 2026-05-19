@@ -4,8 +4,13 @@ import { showNotification, obtenerCampoSQL, copyToClipboard } from './ui.js';
 import { excepcionesTiendas } from './data.js';
 
 function sqlEscape(str) {
-    if (!str) return '';
-    return str.toString().replace(/'/g, "''").replace(/\\/g, '\\\\');
+    if (str === null || str === undefined) return '';
+    
+    return String(str)
+        .replace(/[\0\x08\x09\x1a\n\r]/g, " ")
+        .replace(/\\/g, "\\\\")                
+        .replace(/'/g, "''")                  
+        .trim();                               
 }
 
 /**
