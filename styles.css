@@ -330,3 +330,17 @@ pre.query-box:active { filter: brightness(0.9); }
     .tab-btn { margin-bottom: 5px; border-radius: 4px; border: 1px solid var(--border); }
     .quick-filter-group { border-left: none; padding-left: 0; margin-left: 0; width: 100%; margin-top: 5px; }
 }
+
+input[name="posicion_insercion"] {
+    accent-color: var(--theme-green);
+    transform: scale(1.1);
+}
+
+label:has(input[name="posicion_insercion"]):hover {
+    background-color: rgba(0,0,0,0.03);
+    border-radius: 4px;
+}
+
+body.dark label:has(input[name="posicion_insercion"]):hover {
+    background-color: rgba(255,255,255,0.05);
+}

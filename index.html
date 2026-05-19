@@ -196,8 +196,14 @@
                     <div class="filter-config-box">
                         <label>Configuración de Búsqueda:</label>
                         <div style="display:flex; gap:10px;">
-                            <select id="campoBusqueda" style="flex:1;"><option value="nombre" selected>📝 Por Nombre (G.nombre)</option><option value="id">🔢 Por ID Grupo (G.idGrupo)</option></select>
-                            <select id="tipoBusqueda" style="flex:1;"><option value="contains" selected>🔹 CONTIENE (Like %...%)</option><option value="exact">🔸 EXACTO (Igual =)</option></select>
+                            <select id="campoBusqueda" style="flex:1;">
+                                <option value="nombre" selected>📝 Por Nombre (G.nombre)</option>
+                                <option value="id">🔢 Por ID Grupo (G.idGrupo)</option>
+                            </select>
+                            <select id="tipoBusqueda" style="flex:1;">
+                                <option value="contains" selected>🔹 CONTIENE (Like %...%)</option>
+                                <option value="exact">🔸 EXACTO (Igual =)</option>
+                            </select>
                         </div>
                     </div>
                     <div style="display: flex; gap: 15px;">
@@ -214,6 +220,17 @@
                                 <input type="text" id="busq2" placeholder="Ej: Delivery">
                                 <button class="clear-input-btn" data-action="clearInput" data-target="busq2" title="Borrar">✖</button>
                             </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <label>Posición en el Grupo (Artículos Nuevos):</label>
+                        <div style="display:flex; gap:10px; font-weight:normal; background: rgba(0,0,0,0.02); padding: 8px 15px; border: 1px solid var(--border); border-radius: 6px;">
+                            <label style="margin:0; cursor:pointer;">
+                                <input type="radio" name="posicion_insercion" value="top" checked> ⬆️ Al principio
+                            </label>
+                            <label style="margin:0; cursor:pointer;">
+                                <input type="radio" name="posicion_insercion" value="bottom"> ⬇️ Al final
+                            </label>
                         </div>
                     </div>
                 </div>
