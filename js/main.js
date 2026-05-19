@@ -13,6 +13,7 @@ function buildStateObj() {
         modo_masivo: document.querySelector('input[name="modo_masivo"]:checked')?.value || 'simple',
         modo_borrar: document.querySelector('input[name="modo_borrar"]:checked')?.value || 'simple',
         modo_swap: document.querySelector('input[name="modo_swap"]:checked')?.value || 'simple',
+        posicion_insercion: document.querySelector('input[name="posicion_insercion"]:checked')?.value || 'top',
         
         articulos_excel: document.getElementById('articulos_excel')?.value || '',
         articulos_excel_del: document.getElementById('articulos_excel_del')?.value || '',
@@ -94,6 +95,7 @@ function cargarEstadoFormulario() {
     if(s.modo_masivo) { const r = document.querySelector(`input[name="modo_masivo"][value="${s.modo_masivo}"]`); if(r) { r.checked = true; toggleModoMasivo(); } }
     if(s.modo_borrar) { const r = document.querySelector(`input[name="modo_borrar"][value="${s.modo_borrar}"]`); if(r) { r.checked = true; toggleModoBorrar(); } }
     if(s.modo_swap) { const r = document.querySelector(`input[name="modo_swap"][value="${s.modo_swap}"]`); if(r) { r.checked = true; toggleModoSwap(); } }
+    if(s.posicion_insercion) { const r = document.querySelector(`input[name="posicion_insercion"][value="${s.posicion_insercion}"]`); if(r) r.checked = true; }
 
     setVal('busq1', s.busq1); setVal('busq2', s.busq2); setVal('filter-mass', s.filter_mass); if(s.filter_mass) filtrarTiendas('list-mass', 'filter-mass');
     setVal('busq1_del', s.busq1_del); setVal('busq2_del', s.busq2_del); setVal('filter-delete', s.filter_delete); if(s.filter_delete) filtrarTiendas('list-delete', 'filter-delete');
@@ -733,6 +735,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     window.addEventListener('scroll', UI.handleFloatingScrollButton);
     UI.handleFloatingScrollButton();
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'sqlGenState') {
+            cargarEstadoFormulario();
+        }
+    });
 
     const savedTabTpvs = localStorage.getItem('sqlGenActiveTabTpvs');
     if (savedTabTpvs) switchTab(savedTabTpvs);
@@ -865,6 +872,7 @@ document.addEventListener('change', (e) => {
     if (e.target.name === 'modo_masivo') toggleModoMasivo();
     if (e.target.name === 'modo_borrar') toggleModoBorrar();
     if (e.target.name === 'modo_swap') toggleModoSwap();
+    if (e.target.name === 'posicion_insercion') guardarEstadoGlobal();
     if (e.target.id === 'tipoBusqueda') { UI.gestionarInputsBusqueda('tipoBusqueda', 'busq2'); guardarEstadoGlobal(); }
     if (e.target.id === 'tipoBusqueda_del') { UI.gestionarInputsBusqueda('tipoBusqueda_del', 'busq2_del'); guardarEstadoGlobal(); }
     if (e.target.id === 'tipoBusqueda_swap') { UI.gestionarInputsBusqueda('tipoBusqueda_swap', 'busq2_swap'); guardarEstadoGlobal(); }

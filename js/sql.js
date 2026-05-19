@@ -107,6 +107,11 @@ export function generarSQLMasivo() {
             if (listaTiendas.length === 0) { showNotification("¡Selecciona tiendas!"); return; }
         }
 
+        if (listaArticulos.length > 500) {
+            showNotification("⚠️ Límite excedido: Procesa un máximo de 500 artículos por lote para evitar bloqueos en la base de datos.");
+            return;
+        }
+
         let busq1 = document.getElementById('busq1').value.trim();
         if(!isExcel && !busq1) {
             document.getElementById('busq1').classList.add('input-error');
@@ -167,9 +172,9 @@ export function generarSQLMasivo() {
             });
         }
 
-        let caseUpdate = "";
-        listaArticulos.forEach((art, index) => { caseUpdate += `                WHEN '${art}' THEN ${index + 1}\n`; });
-        caseUpdate += `                ELSE ${listaArticulos.length + 1}`;
+        const caseUpdate = listaArticulos
+        .map((art, index) => `                WHEN '${art}' THEN ${index + 1}`)
+        .join('\n') + `\n                ELSE ${listaArticulos.length + 1}`;
         let listaIn = listaArticulos.map(a => `'${a}'`).join(', ');
 
         let compareOp = (tipo === 'exact') ? '=' : 'LIKE';
@@ -183,6 +188,11 @@ export function generarSQLMasivo() {
             undoWhere = `AND EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSQL} ${compareOp} ListadoGrupos.Busq1)`;
         }
 
+        let posicionInsercion = document.querySelector('input[name="posicion_insercion"]:checked')?.value || 'top';
+        let sortPositionSql = posicionInsercion === 'bottom'
+            ? `CASE WHEN D.idArticulo IN (${listaIn}) THEN 1 ELSE 0 END ASC,`
+            : `CASE WHEN D.idArticulo IN (${listaIn}) THEN 0 ELSE 1 END ASC,`;
+
         // Variaciones de JOIN si usamos matriz cruzada o lista exacta (Excel Tienda)
         let fromJoin1 = isExcelTienda ? `FROM maeres R \nINNER JOIN (${unionAll}) ListadoMasivo ON R.codigo = ListadoMasivo.idRestaurante` : `FROM maeres R \nCROSS JOIN (${unionAll}) ListadoMasivo`;
         let fromJoin2 = isExcelTienda ? `FROM maeres R \nINNER JOIN (${unionAll}) Listado ON R.codigo = Listado.idRestaurante` : `FROM maeres R \nCROSS JOIN (${unionAll}) Listado`;
@@ -194,7 +204,7 @@ export function generarSQLMasivo() {
         
         state.generatedQueries.mq2 = `INSERT INTO fo_desglose (idRestaurante, idEmpresa, idGrupo, idArticulo) \nSELECT R.codigo, R.empresa, G.idGrupo, Listado.idArticulo \n${fromJoin2} \nINNER JOIN fo_grupos G ON G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = Listado.idArticulo AND MA.empresa = R.empresa \nWHERE ${campoSQL} LIKE Listado.Busq1 AND ${campoSQL} LIKE Listado.Busq2 \nAND R.codigo IN (${strTiendas}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = Listado.idArticulo AND D.idGrupo = G.idGrupo);`;
         
-        state.generatedQueries.mq3 = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendas}) \n        ${reorderWhere} \n        AND MA.situacion <> 'B' \n        ORDER BY \n            D.idRestaurante, D.idEmpresa, D.idGrupo, \n            CASE WHEN D.idArticulo IN (${listaIn}) THEN 0 ELSE 1 END ASC, \n            CASE D.idArticulo \n${caseUpdate} \n            END ASC, \n            COALESCE(D.orden, 999999) ASC, \n            D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) TablaOrdenada, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden;`;
+        state.generatedQueries.mq3 = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendas}) \n        ${reorderWhere} \n        AND MA.situacion <> 'B' \n        ORDER BY \n            D.idRestaurante, D.idEmpresa, D.idGrupo, \n            ${sortPositionSql} \n            CASE D.idArticulo \n${caseUpdate} \n            END ASC, \n            COALESCE(D.orden, 999999) ASC, \n            D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) TablaOrdenada, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden;`;
         
         state.generatedQueries.mq4 = `SELECT R.codigo, R.nombre, G.nombre, G.idGrupo, D.idArticulo, D.orden, MA.situacion \nFROM maeres R \nINNER JOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nLEFT JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE D.idArticulo IN (${listaIn}) \nAND R.codigo IN (${strTiendas}) \nORDER BY R.codigo, G.nombre, D.orden;`;
         
@@ -244,11 +254,13 @@ export function generarSQLBorrar() {
         if (isExcel) {
             let validData = state.excel.del.data.filter(d => d.valid && !d.conflict);
             if(validData.length === 0) { showNotification("¡Faltan artículos válidos o hay conflictos sin resolver!"); return; }
-            datosExcel = validData.map(d => ({ idArticulo: safeInt(d.art), grupo: d.grp }));
-            listaArticulos = [...new Set(validData.map(d => safeInt(d.art)))];
+            // Estandarización: Limpieza extra del Excel
+            datosExcel = validData.map(d => ({ idArticulo: safeInt(d.art.toString().replace(/\D/g, '')), grupo: d.grp }));
+            listaArticulos = [...new Set(datosExcel.map(d => d.idArticulo))];
         } else {
             let textArticulos = document.getElementById('articulos_borrar').value;
-            listaArticulos = textArticulos.split(/[\s,]+/).map(s => s.replace(/\D/g,'')).filter(s => s !== '').map(a => safeInt(a));
+            // Estandarización: Separador universal y limpieza de letras
+            listaArticulos = textArticulos.split(/[\r\n, \t]+/).map(s => s.replace(/\D/g,'')).filter(s => s !== '').map(a => safeInt(a));
             if (listaArticulos.length === 0) { showNotification("¡Indica qué artículos borrar!"); return; }
         }
 
@@ -256,7 +268,25 @@ export function generarSQLBorrar() {
         let listaTiendas = Array.from(checkedBoxes).map(cb => safeInt(cb.value));
         if (listaTiendas.length === 0) { showNotification("¡Selecciona tiendas!"); return; }
 
+        // Estandarización: Límite de seguridad de lotes
+        if (listaArticulos.length > 500) {
+            showNotification("⚠️ Límite excedido: Procesa un máximo de 500 artículos por lote para evitar bloqueos.");
+            return;
+        }
+
         let busq1 = document.getElementById('busq1_del').value.trim();
+        
+        // Estandarización: Control estricto de filtro vacío
+        let inputBusq1 = document.getElementById('busq1_del');
+        if (!isExcel && !busq1) {
+            if (!confirm("⚠️ ATENCIÓN: No has puesto Filtro de Grupo.\nSe borrarán estos artículos de TODOS los grupos en las tiendas seleccionadas.\n¿Estás seguro?")) {
+                if(inputBusq1) { inputBusq1.classList.add('input-error'); inputBusq1.focus(); }
+                return;
+            }
+        } 
+        if (inputBusq1) inputBusq1.classList.remove('input-error');
+        if (!isExcel && busq1) agregarHistorial(busq1);
+        
         let busq2 = document.getElementById('busq2_del').value.trim();
         let tipo = document.getElementById('tipoBusqueda_del').value;
         let campoSQL = obtenerCampoSQL('campoBusqueda_del');
@@ -330,8 +360,9 @@ export function generarSQLSwap() {
             let validData = state.excel.swap.data.filter(d => d.valid && !d.duplicate && !d.conflict);
             if (validData.length === 0) { showNotification("¡Faltan pares válidos!"); return; }
             validData.forEach(d => {
-                let sOld = safeInt(d.oldId);
-                let sNew = safeInt(d.newId);
+                // Estandarización: Limpieza extra de los datos del Excel
+                let sOld = safeInt(d.oldId.toString().replace(/\D/g, ''));
+                let sNew = safeInt(d.newId.toString().replace(/\D/g, ''));
                 pairs.push({ old: sOld, new: sNew });
                 if (!allNewIds.includes(sNew)) allNewIds.push(sNew);
             });
@@ -339,8 +370,9 @@ export function generarSQLSwap() {
             const rows = document.querySelectorAll('#swap-rows tr');
             rows.forEach(row => {
                 const inputs = row.querySelectorAll('input');
-                const oldId = inputs[0].value.trim();
-                const newId = inputs[1].value.trim();
+                // Estandarización: Eliminar letras, símbolos o espacios accidentalmente tecleados
+                const oldId = inputs[0].value.trim().replace(/\D/g, '');
+                const newId = inputs[1].value.trim().replace(/\D/g, '');
                 if (oldId && newId) {
                     let sOld = safeInt(oldId);
                     let sNew = safeInt(newId);
@@ -352,17 +384,32 @@ export function generarSQLSwap() {
 
         if (pairs.length === 0) { showNotification("Introduce al menos un par de artículos."); return; }
         
+        // Estandarización: Límite de seguridad de lotes
+        if (pairs.length > 500) {
+            showNotification("⚠️ Límite excedido: Procesa un máximo de 500 pares de intercambio por lote.");
+            return;
+        }
+
         const checkedBoxes = document.querySelectorAll('#list-swap .store-item input:checked');
         let listaTiendas = Array.from(checkedBoxes).map(cb => safeInt(cb.value));
         if (listaTiendas.length === 0) { showNotification("Selecciona tiendas."); return; }
 
         let busq1 = document.getElementById('busq1_swap').value.trim();
+        let inputBusq1 = document.getElementById('busq1_swap');
+
+        // Estandarización: Control estricto de filtro vacío
+        if(!busq1) { 
+            if(!confirm("⚠️ ATENCIÓN: No has puesto Filtro de Grupo.\nSe intercambiarán en TODOS los grupos de las tiendas seleccionadas.\n¿Seguro?")) {
+                if(inputBusq1) { inputBusq1.classList.add('input-error'); inputBusq1.focus(); }
+                return;
+            }
+        } 
+        if (inputBusq1) inputBusq1.classList.remove('input-error');
+        if (busq1) agregarHistorial(busq1);
+
         let busq2 = document.getElementById('busq2_swap').value.trim();
         let tipo = document.getElementById('tipoBusqueda_swap').value;
         let campoSQL = obtenerCampoSQL('campoBusqueda_swap');
-
-        if(!busq1) { if(!confirm("⚠️ ATENCIÓN: No has puesto Filtro de Grupo.\nSe cambiará en TODOS los grupos de las tiendas seleccionadas.\n¿Seguro?")) return; }
-        if(busq1) agregarHistorial(busq1);
 
         const processTxt = (v) => (v && tipo === 'contains') ? `%${v}%` : (v || '%');
         let b1 = sqlEscape(processTxt(busq1));
