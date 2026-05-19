@@ -957,11 +957,18 @@ document.addEventListener('focusout', (e) => {
 });
 
 document.getElementById('importFile').addEventListener('change', function() {
-    const file = this.files[0]; if(!file) return;
+    const file = this.files[0]; 
+    if(!file) return;
+    
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
             const config = JSON.parse(e.target.result);
+            
+            if (config.tiendas && !Array.isArray(config.tiendas)) throw new Error("Formato de tiendas inválido");
+            if (config.grupos && typeof config.grupos !== 'object') throw new Error("Formato de grupos inválido");
+            if (config.historial && !Array.isArray(config.historial)) throw new Error("Formato de historial inválido");
+
             if(config.tiendas) localStorage.setItem('sqlGenStores', JSON.stringify(config.tiendas));
             if(config.grupos) localStorage.setItem('sqlGenCustomGroups', JSON.stringify(config.grupos));
             if(config.historial) localStorage.setItem('sqlGroupHistory', JSON.stringify(config.historial));
@@ -974,9 +981,13 @@ document.getElementById('importFile').addEventListener('change', function() {
             UI.cargarHistorialUI();
             
             UI.showNotification("✅ Configuración cargada con éxito.");
-        } catch(err) { UI.showNotification("❌ Error al leer el archivo."); }
+        } catch(err) { 
+            console.error("Fallo de integridad en importación:", err);
+            UI.showNotification("❌ Error: El archivo está corrupto o manipulado."); 
+        }
     };
     reader.readAsText(file);
+    this.value = ''; 
 });
 
 // EVENTOS DE VENTANA GLOBALES
