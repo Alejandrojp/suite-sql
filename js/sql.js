@@ -1061,9 +1061,7 @@ export function generarGruposTPV() {
         Array.from(selectedStores).forEach(cb => {
             const idStore = safeInt(cb.value);
 
-            sqlOp += `-- ==========================================\n`;
-            sqlOp += `-- TIENDA: ${idStore}\n`;
-            sqlOp += `-- ==========================================\n`;
+            sqlOp += `\n`; 
 
             if (nivel === 'MACROGRUPO') {
                 if (accion === 'INSERT') {
