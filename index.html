@@ -148,6 +148,7 @@
                 <button class="tab-btn danger-tab" data-action="switchTab" data-tab="tab-borrar">🗑️ BORRAR</button>
                 <button class="tab-btn swap-tab" data-action="switchTab" data-tab="tab-swap">🔄 INTERCAMBIAR</button>
                 <button class="tab-btn repair-tab" data-action="switchTab" data-tab="tab-reparar">🛠️ ORDENAR</button>
+                <button class="tab-btn purple-tab" data-action="switchTab" data-tab="tab-grupos">📁 GRUPOS TPV</button>
             </div>
             
             <div id="tab-masivo" class="tab-content theme-section-green active">
@@ -660,6 +661,115 @@
                     <div class="accordion-item"><div class="accordion-header fix">1. ELIMINAR BAJAS </div><div class="accordion-content show"><pre class="query-box"><code class="language-sql" id="rq_delete"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
                     <div class="accordion-item"><div class="accordion-header warning">2. REORDENAR </div><div class="accordion-content show"><pre class="query-box"><code class="language-sql" id="rq_update"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
                     <div class="accordion-item"><div class="accordion-header">3. COMPROBACIÓN</div><div class="accordion-content"><pre class="query-box"><code class="language-sql" id="rq_check"></code></pre><div class="action-bar"><button class="copy-btn">Copiar</button></div></div></div>
+                </div>
+            </div>
+            <div id="tab-grupos" class="tab-content theme-section-purple">
+                <div class="info-box info-purple"><strong>Gestión de Jerarquía:</strong> Crea o actualiza Macrogrupos y Grupos en las tiendas seleccionadas.</div>
+
+                <div class="input-group">
+                    <h3 class="section-title">1. Datos de la Estructura</h3>
+                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                        <div style="flex: 1;">
+                            <label>Nivel de Estructura:</label>
+                            <div class="input-wrapper">
+                                <select id="tpv-nivel" style="width: 100%; padding: 8px;">
+                                    <option value="MACROGRUPO">Macrogrupo</option>
+                                    <option value="GRUPO" selected>Grupo / Subgrupo</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Acción:</label>
+                            <div class="input-wrapper">
+                                <select id="tpv-accion" style="width: 100%; padding: 8px;">
+                                    <option value="INSERT" selected>Crear Nuevo</option>
+                                    <option value="UPDATE">Actualizar Existente</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                        <div style="flex: 1;">
+                            <label>ID (Macro/Grupo):</label>
+                            <div class="input-wrapper"><input type="number" id="tpv-id" placeholder="Ej: 9 o 108"></div>
+                        </div>
+                        <div style="flex: 2;">
+                            <label>Nombre Front Office:</label>
+                            <div class="input-wrapper"><input type="text" id="tpv-nombre" placeholder="Ej: Helados Artesanos"></div>
+                        </div>
+                        <div style="flex: 2;">
+                            <label>Descripción Interna (Opcional):</label>
+                            <div class="input-wrapper"><input type="text" id="tpv-desc" placeholder="Vacío = Usa Front Office"></div>
+                        </div>
+                    </div>
+
+                    <div id="wrap-campos-grupo" style="display: flex; gap: 15px; margin-bottom: 15px; background: rgba(0,0,0,0.02); padding: 10px; border: 1px solid var(--border); border-radius: 6px;">
+                        <div style="flex: 1;">
+                            <label>ID Grupo Padre (0 si es raíz):</label>
+                            <div class="input-wrapper"><input type="number" id="tpv-padre" value="0"></div>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>ID Macrogrupo (Para enlace raíz):</label>
+                            <div class="input-wrapper"><input type="number" id="tpv-macro-enlace" placeholder="Ej: 9"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <h3 class="section-title">2. Seleccionar Tiendas
+                        <span>
+                            <span id="store-count-grupos" class="count-badge">0 seleccionadas</span>
+                            <button class="copy-ids-btn" data-action="copiarSoloIDs" data-target="list-grupos">Copiar IDs</button>
+                        </span>
+                    </h3>
+                    <div class="store-selector-container">
+                        <div class="store-tools">
+                            <div class="input-wrapper" style="max-width: 150px;">
+                                <input type="text" id="filter-grupos" placeholder="🔍 Buscar..." style="padding: 6px; width: 100%;">
+                                <button class="clear-input-btn" data-action="clearInput" data-target="filter-grupos">✖</button>
+                            </div>
+                            <button class="btn-small" style="background: #6f42c1; border-color: #6f42c1;" data-action="openPasteModal" data-target="list-grupos">📋 Pegar IDs</button>
+                            <button class="btn-small" data-action="guardarGrupo" data-target="list-grupos" style="background: #007bff; border-color: #007bff;">+ Guardar Grupo</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-grupos" data-state="true">Todos</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-grupos" data-state="false">Ninguno</button>
+                            <button class="btn-small" data-action="toggleVerSeleccionados" data-target="list-grupos" title="Ver solo lo seleccionado">👁️ Revisar</button>
+                            <div class="quick-filter-group">
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-grupos" data-type="AEROPUERTO">✈️ Aeros</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-grupos" data-type="ESTACI">🚆 Est.</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-grupos" data-type="KIOSKO">🏪 Kios</button>
+                                <button class="btn-small btn-preset" data-action="presetSeleccion" data-target="list-grupos" data-type="CALLE">🏙️ Calle</button>
+                            </div>
+                        </div>
+                        <div class="custom-groups-bar">
+                            <button class="btn-small" data-action="openGroupManager" style="background: #6c757d; border-color: #6c757d; font-size:10px;">🗑️ Gestionar Mis Grupos</button>
+                            <span style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></span>
+                            <div id="dynamic-groups-grupos" style="display:inline-flex; gap:5px; flex-wrap:wrap;"></div>
+                        </div>
+                        <div class="store-list" id="list-grupos"></div>
+                    </div>
+                </div>
+
+                <div class="actions-row">
+                    <button id="btn-gen-grupos" class="btn-generate btn-gen-purple btn-gen-primary" data-action="generarGruposTPV">GENERAR SQL (Ctrl+Enter)</button>
+                    <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="grupos">💾 Descargar</button>
+                    <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
+                </div>
+
+                <div id="res-grupos" class="output-section">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin:0; flex:1; text-align:center;">Resultados <span id="time-grupos" class="timestamp-info"></span></h3>
+                        <div style="display:flex; align-items: center; gap:10px;">
+                            <div class="safe-mode-toggle" style="background: none; border: none; padding: 0;">
+                                <input type="checkbox" id="cleanCopyGrupos" title="Copia solo el código SQL sin comentarios">
+                                <label for="cleanCopyGrupos" style="font-size: 12px; margin: 0; color: #666;">Copiar limpio</label>
+                            </div>
+                            <button class="btn-small" data-action="toggleAllAccordions" data-expanded="false" style="background:#17a2b8; border-color:#17a2b8;">📂 Abrir todos</button>
+                            <button class="btn-small" data-action="hideElement" data-target="res-grupos" style="background:#dc3545;">🗑️ Limpiar</button>
+                        </div>
+                    </div>
+                    <div class="accordion-item"><div class="accordion-header swap">1. SCRIPT DE OPERACIÓN</div><div class="accordion-content show"><div class="action-bar"><button class="copy-btn" onclick="window.copyTextPlantillas('out-grupos', this, 'cleanCopyGrupos')">📋 Copiar</button></div><pre class="query-box"><code class="language-sql" id="out-grupos"></code></pre></div></div>
+                    <div class="accordion-item"><div class="accordion-header fix">2. 🔎 AUDITORÍA DE RESULTADOS</div><div class="accordion-content"><div class="action-bar"><button class="copy-btn" onclick="window.copyTextPlantillas('out-grupos-audit', this, 'cleanCopyGrupos')">📋 Copiar</button></div><pre class="query-box"><code class="language-sql" id="out-grupos-audit"></code></pre></div></div>
                 </div>
             </div>
         </div>
