@@ -933,6 +933,36 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('change', (e) => {
+    // === LÓGICA INTELIGENTE PARA LA PESTAÑA DE GRUPOS ===
+    if (e.target.id === 'tpv-accion' || e.target.id === 'tpv-nivel') {
+        const accion = document.getElementById('tpv-accion').value;
+        const nivel = document.getElementById('tpv-nivel').value;
+        
+        // Ocultar los campos de "Grupo Padre" si estamos en Macrogrupo o si estamos Eliminando
+        const wrapCampos = document.getElementById('wrap-campos-grupo');
+        if (nivel === 'GRUPO' && accion !== 'DELETE') {
+            wrapCampos.style.display = 'flex';
+        } else {
+            wrapCampos.style.display = 'none';
+        }
+
+        // Bloquear Nombre y Descripción si la acción es Eliminar
+        const isDelete = (accion === 'DELETE');
+        document.getElementById('tpv-nombre').disabled = isDelete;
+        document.getElementById('tpv-desc').disabled = isDelete;
+        
+        if (isDelete) {
+            document.getElementById('tpv-nombre').value = '';
+            document.getElementById('tpv-desc').value = '';
+            document.getElementById('tpv-nombre').placeholder = 'No se necesita para borrar';
+            document.getElementById('tpv-desc').placeholder = 'No se necesita para borrar';
+        } else {
+            document.getElementById('tpv-nombre').placeholder = 'Ej: Helados Artesanos';
+            document.getElementById('tpv-desc').placeholder = 'Vacío = Usa Front Office';
+        }
+        guardarEstadoGlobal();
+    }
+
     if (e.target.name === 'modo_p_add') toggleModoPAdd();
     if (e.target.name === 'modo_p_del') toggleModoPDel();
     
@@ -945,7 +975,7 @@ document.addEventListener('change', (e) => {
     if (e.target.id === 'tipoBusqueda_del') { UI.gestionarInputsBusqueda('tipoBusqueda_del', 'busq2_del'); guardarEstadoGlobal(); }
     if (e.target.id === 'tipoBusqueda_swap') { UI.gestionarInputsBusqueda('tipoBusqueda_swap', 'busq2_swap'); guardarEstadoGlobal(); }
     if (e.target.id === 'tipoBusqueda_repair') { UI.gestionarInputsBusqueda('tipoBusqueda_repair', 'busq2_repair'); guardarEstadoGlobal(); }
-    if (e.target.id === 'tpv-nivel') { document.getElementById('wrap-campos-grupo').style.display = e.target.value === 'GRUPO' ? 'flex' : 'none'; guardarEstadoGlobal(); }    
+    
     if (['auditGrupoEspecifico', 'auditGrupoEspecificoSwap', 'safeMode', 'safeModePlant', 'campoBusqueda', 'campoBusqueda_del', 'campoBusqueda_swap', 'campoBusqueda_repair'].includes(e.target.id)) guardarEstadoGlobal();
 });
 
