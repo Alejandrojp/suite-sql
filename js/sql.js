@@ -938,6 +938,7 @@ export function copiarMasivo(btn) {
     if (tabId === 'tab-masivo') cleanCheckboxId = 'cleanCopyMass';
     else if (tabId === 'tab-borrar') cleanCheckboxId = 'cleanCopyDel';
     else if (tabId === 'tab-swap') cleanCheckboxId = 'cleanCopySwap';
+    else if (tabId === 'tab-grupos') cleanCheckboxId = 'cleanCopyGrupos';
     // Plantillas
     else if (tabId === 'tab-add') cleanCheckboxId = 'cleanCopyAddPlantillas';
     else if (tabId === 'tab-excel-del') cleanCheckboxId = 'cleanCopyDelPlantillas';
@@ -989,6 +990,12 @@ export function descargarSQL(type) {
         if (!document.getElementById('rq_delete').textContent) { showNotification("Genera primero"); return; }
         content = document.getElementById('rq_delete').textContent + "\n\n" + document.getElementById('rq_update').textContent;
     }
+    else if (type === 'grupos') {
+        if (!document.getElementById('out-grupos').textContent) { showNotification("Genera primero"); return; }
+        let sqlOp = (window.fullSqlCache && window.fullSqlCache['out-grupos']) || document.getElementById('out-grupos').textContent;
+        let sqlAudit = (window.fullSqlCache && window.fullSqlCache['out-grupos-audit']) || document.getElementById('out-grupos-audit').textContent;
+        content = sqlOp + "\n\n" + sqlAudit;
+    }
     // Plantillas
     else if (type === 'p_add') {
         let ins = (window.fullSqlCache && window.fullSqlCache['out-add']) || document.getElementById('out-add').textContent;
@@ -1015,4 +1022,128 @@ export function descargarSQL(type) {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); window.URL.revokeObjectURL(url);
+}
+
+// ==========================================
+// MÓDULO: GESTIÓN DE GRUPOS Y MACROGRUPOS (TPV)
+// ==========================================
+export function generarGruposTPV() {
+    try {
+        const selectedStores = document.querySelectorAll('#list-grupos .store-item input:checked');
+        if (selectedStores.length === 0) {
+            showNotification("⚠️ Selecciona al menos una tienda destino.");
+            return;
+        }
+
+        const nivel = document.getElementById('tpv-nivel').value;
+        const accion = document.getElementById('tpv-accion').value;
+        const idRaw = document.getElementById('tpv-id').value.trim();
+        const nombreFront = document.getElementById('tpv-nombre').value.trim();
+        let descInterna = document.getElementById('tpv-desc').value.trim();
+        const idPadreRaw = document.getElementById('tpv-padre').value.trim() || '0';
+        const idMacroEnlaceRaw = document.getElementById('tpv-macro-enlace').value.trim() || '';
+
+        if (!idRaw || !nombreFront) {
+            showNotification("⚠️ Los campos ID y Nombre Front Office son obligatorios.");
+            return;
+        }
+
+        const id = safeInt(idRaw);
+        const idPadre = safeInt(idPadreRaw);
+        const idMacroEnlace = idMacroEnlaceRaw ? safeInt(idMacroEnlaceRaw) : null;
+
+        if (!descInterna) descInterna = nombreFront;
+        const usuario = 'a.juarez';
+
+        let sqlOp = "";
+        let sqlAudit = `SELECT 'AUDITORIA' as Bloque;\n\n`;
+
+        Array.from(selectedStores).forEach(cb => {
+            const idStore = safeInt(cb.value);
+
+            sqlOp += `-- ==========================================\n`;
+            sqlOp += `-- TIENDA: ${idStore}\n`;
+            sqlOp += `-- ==========================================\n`;
+
+            if (nivel === 'MACROGRUPO') {
+                if (accion === 'INSERT') {
+                    sqlOp += `INSERT INTO fo_macrogrupos (
+    idEmpresa, idRestaurante, idMacrogrupo, idCamarero, idSala, Descripcion, Fichero, Orden, font, font_size, font_bold, font_color, 
+    descripcion_boton, grupos_articulos_conf_personalizada, num_filas_grupos, num_columnas_grupos, boton_grupo_height, boton_grupo_width, 
+    situacion, usuario_creacion, fecha_creacion, usuario_modificacion, fecha_modificacion, sinqro_enviar, prestashop_enviar, 
+    prestashop_tienda_sincronizar, tipo, sinqro_tarifa, woocommerce_enviar, usar_en_kiosk, sinqro_order_types, woocommerce_descripciones_selector
+) SELECT 
+    ${idStore}, ${idStore}, ${id}, 0, 0, '${sqlEscape(descInterna)}', 'COL3', 
+    COALESCE(MAX(Orden), -1) + 1, 'Arial', 8, 'N', '0,0,0', 
+    '${sqlEscape(nombreFront)}', 'N', 0, 0, 0, 0, 
+    'A', '${usuario}', NOW(), '${usuario}', NOW(), 'N', 'N', 0, 0, 0, 'N', 'N', 'delivery|collection|insitu', '{}'
+FROM fo_macrogrupos WHERE idEmpresa = ${idStore} AND idRestaurante = ${idStore};\n\n`;
+                } else {
+                    sqlOp += `UPDATE fo_macrogrupos 
+SET Descripcion = '${sqlEscape(descInterna)}', descripcion_boton = '${sqlEscape(nombreFront)}', usuario_modificacion = '${usuario}', fecha_modificacion = NOW()
+WHERE idMacrogrupo = ${id} AND idEmpresa = ${idStore} AND idRestaurante = ${idStore};\n\n`;
+                }
+
+                sqlAudit += `SELECT 'fo_macrogrupos' AS Tabla, idMacrogrupo AS ID, Descripcion AS Nombre, situacion, fecha_modificacion FROM fo_macrogrupos WHERE idMacrogrupo = ${id} AND idEmpresa = ${idStore} AND idRestaurante = ${idStore};\n`;
+
+            } else if (nivel === 'GRUPO') {
+                if (accion === 'INSERT') {
+                    sqlOp += `INSERT INTO fo_grupos (
+    idGrupo, idCamarero, idSala, Descripcion, Fichero, idEmpresa, idRestaurante, ScanCode, OrdenGrupos, idGrupoPadre, idPosicion, TipoGrupo, 
+    font, font_size, font_bold, font_color, articulos_conf_personalizada, num_filas_articulos, num_columnas_articulos, boton_articulo_height, boton_articulo_width, 
+    situacion, usuario_creacion, fecha_creacion, usuario_modificacion, fecha_modificacion, nombre, prestashop_tienda_sincronizar, prestashop_category_id, 
+    woocommerce_category_id, visible_en_tpv, visible_en_canales_online, visible_en_kioscos, woocommerce_mostrar_precio_carta_online
+) SELECT 
+    ${id}, 0, 0, '${sqlEscape(nombreFront)}', '', ${idStore}, ${idStore}, 0, 0, ${idPadre}, 
+    COALESCE(MAX(idPosicion), -1) + 1, 0, 'Arial', 8, 'N', '0,0,0', 'N', 0, 0, 0, 0, 
+    'A', '${usuario}', NOW(), '${usuario}', NOW(), '${sqlEscape(descInterna)}', 0, 0, 0, 'S', 'S', 'S', 'S'
+FROM fo_grupos WHERE idEmpresa = ${idStore} AND idRestaurante = ${idStore} AND idGrupoPadre = ${idPadre};\n`;
+
+                    if (idMacroEnlace && idPadre === '0') {
+                        sqlOp += `INSERT INTO fo_macrogrupos_grupos (idEmpresa, idRestaurante, idMacrogrupo, idGrupo, Orden, mostrar_pantalla_principal_kiosk, size_pantalla_principal_kiosk, orden_pantalla_principal_kiosk, visible_en_tpv, visible_en_canales_online, visible_en_kioscos) 
+SELECT ${idStore}, ${idStore}, ${idMacroEnlace}, ${id}, COALESCE(MAX(Orden), -1) + 1, 'N', 4, 0, 'S', 'S', 'S' 
+FROM fo_macrogrupos_grupos WHERE idEmpresa = ${idStore} AND idRestaurante = ${idStore} AND idMacrogrupo = ${idMacroEnlace};\n`;
+                    }
+                    sqlOp += `\n`;
+                } else {
+                    sqlOp += `UPDATE fo_grupos 
+SET Descripcion = '${sqlEscape(nombreFront)}', nombre = '${sqlEscape(descInterna)}', idGrupoPadre = ${idPadre}, usuario_modificacion = '${usuario}', fecha_modificacion = NOW()
+WHERE idGrupo = ${id} AND idEmpresa = ${idStore} AND idRestaurante = ${idStore};\n`;
+
+                    if (idMacroEnlace && idPadre === '0') {
+                        sqlOp += `UPDATE fo_macrogrupos_grupos SET idMacrogrupo = ${idMacroEnlace} WHERE idGrupo = ${id} AND idEmpresa = ${idStore} AND idRestaurante = ${idStore};\n`;
+                    }
+                    sqlOp += `\n`;
+                }
+
+                sqlAudit += `SELECT 'fo_grupos' AS Tabla, idGrupo AS ID, idGrupoPadre AS Padre, Descripcion AS FrontOffice, nombre AS Interna FROM fo_grupos WHERE idGrupo = ${id} AND idEmpresa = ${idStore} AND idRestaurante = ${idStore};\n`;
+                if (idMacroEnlace && idPadre === '0') {
+                    sqlAudit += `SELECT 'fo_macrogrupos_grupos' AS Tabla, idMacrogrupo AS Macro, idGrupo AS Grupo, Orden FROM fo_macrogrupos_grupos WHERE idGrupo = ${id} AND idEmpresa = ${idStore} AND idRestaurante = ${idStore};\n`;
+                }
+            }
+        });
+
+        let fullScript = wrapTransaction(sqlOp.trim(), 'safeMode');
+
+        document.getElementById('out-grupos').textContent = fullScript;
+        document.getElementById('out-grupos-audit').textContent = sqlAudit;
+        
+        window.fullSqlCache = window.fullSqlCache || {};
+        window.fullSqlCache['out-grupos'] = fullScript;
+        window.fullSqlCache['out-grupos-audit'] = sqlAudit;
+
+        if (window.Prism) {
+            Prism.highlightElement(document.getElementById('out-grupos'));
+            Prism.highlightElement(document.getElementById('out-grupos-audit'));
+        }
+
+        document.getElementById('res-grupos').style.display = 'block';
+        document.getElementById('time-grupos').textContent = `(Generado: ${new Date().toLocaleTimeString()})`;
+        document.getElementById('res-grupos').scrollIntoView({behavior: "smooth"});
+        showNotification("✅ SQL de Jerarquía generado exitosamente.");
+
+    } catch (error) {
+        console.error("Ejecución SQL detenida por seguridad:", error);
+        showNotification("⚠️ Error al generar SQL. Revisa la consola.");
+    }
 }

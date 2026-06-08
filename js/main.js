@@ -110,7 +110,15 @@ function buildStateObj() {
         inputEmpty: document.getElementById('input-empty')?.value || '',
         consProv: document.getElementById('cons-prov')?.value || '',
         consClientes: document.getElementById('cons-clientes')?.value || '',
-        pasteUpd: document.getElementById('paste-upd')?.value || ''
+        pasteUpd: document.getElementById('paste-upd')?.value || '',
+        tpv_nivel: document.getElementById('tpv-nivel')?.value || 'GRUPO',
+        tpv_accion: document.getElementById('tpv-accion')?.value || 'INSERT',
+        tpv_id: document.getElementById('tpv-id')?.value || '',
+        tpv_nombre: document.getElementById('tpv-nombre')?.value || '',
+        tpv_desc: document.getElementById('tpv-desc')?.value || '',
+        tpv_padre: document.getElementById('tpv-padre')?.value || '0',
+        tpv_macro_enlace: document.getElementById('tpv-macro-enlace')?.value || '',
+        filter_grupos: document.getElementById('filter-grupos')?.value || ''
     };
 }
 
@@ -156,6 +164,14 @@ function cargarEstadoFormulario() {
     if(s.modo_p_del) { const r = document.querySelector(`input[name="modo_p_del"][value="${s.modo_p_del}"]`); if(r) { r.checked = true; toggleModoPDel(); } }
 
     setVal('input-empty', s.inputEmpty); setVal('cons-prov', s.consProv); setVal('cons-clientes', s.consClientes); setVal('paste-upd', s.pasteUpd);
+    setVal('tpv-nivel', s.tpv_nivel); setVal('tpv-accion', s.tpv_accion);
+    setVal('tpv-id', s.tpv_id); setVal('tpv-nombre', s.tpv_nombre); setVal('tpv-desc', s.tpv_desc);
+    setVal('tpv-padre', s.tpv_padre); setVal('tpv-macro-enlace', s.tpv_macro_enlace);
+    setVal('filter-grupos', s.filter_grupos); if(s.filter_grupos) filtrarTiendas('list-grupos', 'filter-grupos');
+    if(s.tpv_nivel) {
+        const wrapCampos = document.getElementById('wrap-campos-grupo');
+        if (wrapCampos) wrapCampos.style.display = s.tpv_nivel === 'GRUPO' ? 'flex' : 'none';
+    }
 }
 
 // ==========================================
@@ -734,6 +750,7 @@ function repintarTodasLasListasDeTiendas() {
     UI.crearListaTiendas('list-repair', 'store-count-repair', triggerChange);
     UI.crearListaTiendas('list-add', 'store-count-add', triggerChange);
     UI.crearListaTiendas('list-del', 'store-count-del', triggerChange);
+    UI.crearListaTiendas('list-grupos', 'store-count-grupos', triggerChange);
 }
 
 // ==========================================
@@ -753,6 +770,7 @@ document.addEventListener('DOMContentLoaded', () => {
     UI.crearListaTiendas('list-delete', 'store-count-delete', triggerChange);
     UI.crearListaTiendas('list-swap', 'store-count-swap', triggerChange);
     UI.crearListaTiendas('list-repair', 'store-count-repair', triggerChange);
+    UI.crearListaTiendas('list-grupos', 'store-count-grupos', triggerChange)
     
     // Plantillas (Add y Delete manual)
     UI.crearListaTiendas('list-add', 'store-count-add', triggerChange); 
@@ -863,6 +881,7 @@ document.addEventListener('click', (e) => {
         case 'generarSQLBorrar': ejecutarGeneracionAsincrona(btn, () => SQL.generarSQLBorrar()); break;
         case 'generarSQLSwap': ejecutarGeneracionAsincrona(btn, () => SQL.generarSQLSwap()); break;
         case 'generarSQLReparar': ejecutarGeneracionAsincrona(btn, () => SQL.generarSQLReparar()); break;
+        case 'generarGruposTPV': ejecutarGeneracionAsincrona(btn, () => SQL.generarGruposTPV()); break;
         
         case 'generarAddPlantillas': ejecutarGeneracionAsincrona(btn, () => SQL.generarAddPlantillas()); break;
         case 'generarDelExcelPlantillas': ejecutarGeneracionAsincrona(btn, () => SQL.generarDelExcelPlantillas()); break;
@@ -926,7 +945,7 @@ document.addEventListener('change', (e) => {
     if (e.target.id === 'tipoBusqueda_del') { UI.gestionarInputsBusqueda('tipoBusqueda_del', 'busq2_del'); guardarEstadoGlobal(); }
     if (e.target.id === 'tipoBusqueda_swap') { UI.gestionarInputsBusqueda('tipoBusqueda_swap', 'busq2_swap'); guardarEstadoGlobal(); }
     if (e.target.id === 'tipoBusqueda_repair') { UI.gestionarInputsBusqueda('tipoBusqueda_repair', 'busq2_repair'); guardarEstadoGlobal(); }
-    
+    if (e.target.id === 'tpv-nivel') { document.getElementById('wrap-campos-grupo').style.display = e.target.value === 'GRUPO' ? 'flex' : 'none'; guardarEstadoGlobal(); }    
     if (['auditGrupoEspecifico', 'auditGrupoEspecificoSwap', 'safeMode', 'safeModePlant', 'campoBusqueda', 'campoBusqueda_del', 'campoBusqueda_swap', 'campoBusqueda_repair'].includes(e.target.id)) guardarEstadoGlobal();
 });
 
@@ -941,6 +960,7 @@ document.addEventListener('keyup', (e) => {
         if (e.target.id === 'filter-delete') filtrarTiendas('list-delete', 'filter-delete');
         if (e.target.id === 'filter-swap') filtrarTiendas('list-swap', 'filter-swap');
         if (e.target.id === 'filter-repair') filtrarTiendas('list-repair', 'filter-repair');
+        if (e.target.id === 'filter-grupos') filtrarTiendas('list-grupos', 'filter-grupos');
         
         if (e.target.id === 'filter-add') filtrarTiendas('list-add', 'filter-add');
         if (e.target.id === 'filter-del') filtrarTiendas('list-del', 'filter-del');
