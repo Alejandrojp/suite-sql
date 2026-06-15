@@ -45,7 +45,7 @@ export function parseExcelData(rawText, tab) {
                             seenExact.add(exactKey);
                             if (isExactDuplicate) exactDuplicates++;
 
-                            let isValid = (colArt.length >= 4 && colArt.length <= 6);
+                            let isValid = (colArt.length >= 3 && colArt.length <= 6);
                             parsedData.push({ tienda: colTienda, art: colArt, grp: colGrp, valid: isValid, conflict: false, duplicate: isExactDuplicate });
                             if (!isValid) errors = true;
                         } else { errors = true; }
@@ -62,7 +62,7 @@ export function parseExcelData(rawText, tab) {
                             seenExact.add(exactKey);
                             if (isExactDuplicate) exactDuplicates++;
 
-                            let isValid = (col1.length >= 4 && col1.length <= 6);
+                            let isValid = (col1.length >= 3 && col1.length <= 6);
                             
                             if (tab === 'swap') {
                                 parsedData.push({ oldId: col1, newId: col2, valid: isValid, conflict: false, duplicate: isExactDuplicate });

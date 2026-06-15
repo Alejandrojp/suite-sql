@@ -5,12 +5,12 @@ import { excepcionesTiendas } from './data.js';
 
 function sqlEscape(str) {
     if (str === null || str === undefined) return '';
-    
+
     return String(str)
         .replace(/[\0\x08\x09\x1a\n\r]/g, " ")
-        .replace(/\\/g, "\\\\")                
-        .replace(/'/g, "''")                  
-        .trim();                               
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "''")
+        .trim();
 }
 
 /**
@@ -43,17 +43,17 @@ function inyectarSQLPlantillas(containerId, codeId, sql) {
     const container = document.getElementById(containerId);
     const codeEl = document.getElementById(codeId);
     if (!container || !codeEl) return;
-    
+
     container.style.display = 'block';
-    
+
     window.fullSqlCache = window.fullSqlCache || {};
     window.fullSqlCache[codeId] = sql;
-    
+
     codeEl.textContent = sql;
-    
-    codeEl.dataset.fullSql = "MEM_CACHE"; 
-    if(window.Prism) window.Prism.highlightElement(codeEl);
-    container.scrollIntoView({behavior: "smooth", block: "start"});
+
+    codeEl.dataset.fullSql = "MEM_CACHE";
+    if (window.Prism) window.Prism.highlightElement(codeEl);
+    container.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function wrapTransactionPlantillas(sql) {
@@ -71,15 +71,15 @@ export function generarSQLMasivo() {
         let modoMasivo = document.querySelector('input[name="modo_masivo"]:checked').value;
         let isExcel = modoMasivo === 'excel' || modoMasivo === 'excel_tienda';
         let isExcelTienda = modoMasivo === 'excel_tienda';
-        
+
         let listaArticulos = [];
         let datosExcel = [];
         let listaTiendas = [];
 
         if (isExcel) {
             let validData = state.excel.mass.data.filter(d => d.valid && !d.conflict);
-            if(validData.length === 0) { showNotification("¡Faltan artículos válidos o hay conflictos sin resolver!"); return; }
-            
+            if (validData.length === 0) { showNotification("¡Faltan artículos válidos o hay conflictos sin resolver!"); return; }
+
             if (isExcelTienda) {
                 let mappedTiendas = new Set();
                 validData.forEach(d => {
@@ -102,7 +102,7 @@ export function generarSQLMasivo() {
             }
         } else {
             let textArticulos = document.getElementById('articulos').value;
-            listaArticulos = textArticulos.split(/[\r\n,]+/).map(s => s.replace(/\D/g,'')).filter(s => s !== '').map(a => safeInt(a));
+            listaArticulos = textArticulos.split(/[\r\n,]+/).map(s => s.replace(/\D/g, '')).filter(s => s !== '').map(a => safeInt(a));
             if (listaArticulos.length === 0) { showNotification("¡Faltan los artículos!"); return; }
         }
 
@@ -118,23 +118,28 @@ export function generarSQLMasivo() {
         }
 
         let busq1 = document.getElementById('busq1').value.trim();
-        if(!isExcel && !busq1) {
+        if (!isExcel && !busq1) {
             document.getElementById('busq1').classList.add('input-error');
             showNotification("¡Falta el filtro principal!");
             document.getElementById('busq1').focus();
             return;
         }
-        if(!isExcel && busq1) agregarHistorial(busq1);
-        
+        if (!isExcel && busq1) agregarHistorial(busq1);
+
         let busq2 = document.getElementById('busq2').value.trim();
         let tipo = document.getElementById('tipoBusqueda').value;
         let campoSQL = obtenerCampoSQL('campoBusqueda');
 
-        const processTxt = (v) => (v && tipo === 'contains') ? `%${v}%` : (v || '%');
+        let esBusquedaPorId = campoSQL.includes('idGrupo');
+        if (esBusquedaPorId) tipo = 'exact';
+
+        const processTxt = (v) => (v && tipo === 'contains' && !esBusquedaPorId) ? `%${v}%` : (v || '%');
         let b1 = isExcel ? '%' : sqlEscape(processTxt(busq1));
         let b2 = isExcel ? '%' : ((tipo === 'exact') ? '%' : sqlEscape(processTxt(busq2)));
-        let strTiendas = listaTiendas.join(','); 
+        let strTiendas = listaTiendas.join(',');
         
+        let compareOp = (tipo === 'exact' || esBusquedaPorId) ? '=' : 'LIKE';
+
         let unionAll = ""; let unionSimple = ""; let unionGroups = "";
 
         if (isExcel) {
@@ -178,18 +183,17 @@ export function generarSQLMasivo() {
         }
 
         const caseUpdate = listaArticulos
-        .map((art, index) => `                WHEN '${art}' THEN ${index + 1}`)
-        .join('\n') + `\n                ELSE ${listaArticulos.length + 1}`;
+            .map((art, index) => `                WHEN '${art}' THEN ${index + 1}`)
+            .join('\n') + `\n                ELSE ${listaArticulos.length + 1}`;
         let listaIn = listaArticulos.map(a => `'${a}'`).join(', ');
 
-        let compareOp = (tipo === 'exact') ? '=' : 'LIKE';
-        let reorderWhere = `AND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''}`;
-        let deleteWhere = `AND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''}`;
+        let reorderWhere = `AND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''}`;
+        let deleteWhere = `AND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''}`;
         let undoWhere = `AND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''}`;
 
         if (isExcel) {
-            reorderWhere = `AND EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSQL} LIKE ListadoGrupos.Busq1)`;
-            deleteWhere = `AND EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSQL} LIKE ListadoGrupos.Busq1)`;
+            reorderWhere = `AND EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSQL} ${compareOp} ListadoGrupos.Busq1)`;
+            deleteWhere = `AND EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSQL} ${compareOp} ListadoGrupos.Busq1)`;
             undoWhere = `AND EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSQL} ${compareOp} ListadoGrupos.Busq1)`;
         }
 
@@ -204,15 +208,15 @@ export function generarSQLMasivo() {
         let fromJoin5 = isExcelTienda ? `FROM maeres R \nINNER JOIN (${unionSimple}) ListaIdeal ON R.codigo = ListaIdeal.idRestaurante` : `FROM maeres R \nCROSS JOIN (${unionSimple}) ListaIdeal`;
 
         state.generatedQueries.mq0 = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \n${deleteWhere} \nAND MA.situacion = 'B';`;
-        
+
         state.generatedQueries.mq1 = `SELECT R.codigo, R.nombre, ListadoMasivo.idArticulo, G.nombre, G.idGrupo, MA.situacion \n${fromJoin1} \nINNER JOIN fo_grupos G ON G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nINNER JOIN maeart MA ON MA.codigo = ListadoMasivo.idArticulo AND MA.empresa = R.empresa \nWHERE ${campoSQL} LIKE ListadoMasivo.Busq1 AND ${campoSQL} LIKE ListadoMasivo.Busq2 \nAND R.codigo IN (${strTiendas}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = ListadoMasivo.idArticulo AND D.idGrupo = G.idGrupo) \nORDER BY R.codigo, ListadoMasivo.idArticulo;`;
-        
+
         state.generatedQueries.mq2 = `INSERT INTO fo_desglose (idRestaurante, idEmpresa, idGrupo, idArticulo) \nSELECT R.codigo, R.empresa, G.idGrupo, Listado.idArticulo \n${fromJoin2} \nINNER JOIN fo_grupos G ON G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nINNER JOIN maeart MA ON MA.codigo = Listado.idArticulo AND MA.empresa = R.empresa \nWHERE ${campoSQL} LIKE Listado.Busq1 AND ${campoSQL} LIKE Listado.Busq2 \nAND R.codigo IN (${strTiendas}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = Listado.idArticulo AND D.idGrupo = G.idGrupo);`;
-        
+
         state.generatedQueries.mq3 = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa AND G.situacion = 'A' \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendas}) \n        ${reorderWhere} \n        AND MA.situacion <> 'B' \n        ORDER BY \n            D.idRestaurante, D.idEmpresa, D.idGrupo, \n            ${sortPositionSql} \n            CASE D.idArticulo \n${caseUpdate} \n            END ASC, \n            COALESCE(D.orden, 999999) ASC, \n            D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) TablaOrdenada, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden;`;
-        
+
         state.generatedQueries.mq4 = `SELECT R.codigo, R.nombre, G.nombre, G.idGrupo, D.idArticulo, D.orden, MA.situacion \nFROM maeres R \nINNER JOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nLEFT JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE D.idArticulo IN (${listaIn}) \nAND R.codigo IN (${strTiendas}) \nORDER BY R.codigo, G.nombre, D.orden;`;
-        
+
         let auditEspecifico = document.getElementById('auditGrupoEspecifico') && document.getElementById('auditGrupoEspecifico').checked;
         let opAuditoria = (tipo === 'exact') ? '=' : 'LIKE';
         let campoSub = campoSQL.replace('G.', 'G2.');
@@ -225,9 +229,9 @@ export function generarSQLMasivo() {
         } else {
             state.generatedQueries.mq5 = `SELECT R.codigo as 'Nº Tienda', R.nombre as Tienda, ListaIdeal.idArticulo as Código, MA.descripcion_principal as Descripción, F.nombre as Familia, S.nombre as Subfamilia, COALESCE(G.nombre, '---') as Grupo, G.idGrupo, D.orden as Orden, CASE WHEN D.idArticulo IS NOT NULL THEN 'OK' ELSE 'FALTA' END as Estado, MA.situacion \n${fromJoin5} \nLEFT JOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa AND D.idArticulo = ListaIdeal.idArticulo \nLEFT JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nLEFT JOIN maeart MA ON MA.codigo = ListaIdeal.idArticulo AND MA.empresa = R.empresa \nLEFT JOIN desfam F ON F.codigo = MA.familia AND F.empresa = MA.empresa AND F.idioma = 1 \nLEFT JOIN dessub S ON S.codigo = MA.subfamilia AND S.empresa = MA.empresa AND S.idioma = 1 \nWHERE R.codigo IN (${strTiendas}) \nORDER BY Estado ASC, R.codigo, ListaIdeal.idArticulo;`;
         }
-        
+
         state.generatedQueries.mq6 = `DELETE D FROM fo_desglose D \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa AND G.situacion = 'A' \nWHERE D.idRestaurante IN (${strTiendas}) \nAND D.idArticulo IN (${listaIn}) \n${undoWhere};`;
-        
+
         let combined = state.generatedQueries.mq0 + "\n\n" + state.generatedQueries.mq2 + "\n\n" + state.generatedQueries.mq3;
         state.generatedQueries.mq7 = wrapTransaction(combined, 'safeMode');
 
@@ -239,12 +243,12 @@ export function generarSQLMasivo() {
         document.getElementById('mq5').textContent = state.generatedQueries.mq5;
         document.getElementById('mq6').textContent = state.generatedQueries.mq6;
         document.getElementById('mq7').textContent = state.generatedQueries.mq7;
-        
-        if(window.Prism) ['mq0','mq1','mq2','mq3','mq4','mq5','mq6','mq7'].forEach(id => Prism.highlightElement(document.getElementById(id)));
+
+        if (window.Prism) ['mq0', 'mq1', 'mq2', 'mq3', 'mq4', 'mq5', 'mq6', 'mq7'].forEach(id => Prism.highlightElement(document.getElementById(id)));
 
         document.getElementById('time-mass').innerText = `(Generado: ${new Date().toLocaleTimeString()})`;
         document.getElementById('res-mass').style.display = 'block';
-        document.getElementById('res-mass').scrollIntoView({behavior: "smooth"});
+        document.getElementById('res-mass').scrollIntoView({ behavior: "smooth" });
     } catch (error) {
         console.error("Ejecución SQL detenida por seguridad:", error);
     }
@@ -258,14 +262,14 @@ export function generarSQLBorrar() {
 
         if (isExcel) {
             let validData = state.excel.del.data.filter(d => d.valid && !d.conflict);
-            if(validData.length === 0) { showNotification("¡Faltan artículos válidos o hay conflictos sin resolver!"); return; }
+            if (validData.length === 0) { showNotification("¡Faltan artículos válidos o hay conflictos sin resolver!"); return; }
             // Estandarización: Limpieza extra del Excel
             datosExcel = validData.map(d => ({ idArticulo: safeInt(d.art.toString().replace(/\D/g, '')), grupo: d.grp }));
             listaArticulos = [...new Set(datosExcel.map(d => d.idArticulo))];
         } else {
             let textArticulos = document.getElementById('articulos_borrar').value;
             // Estandarización: Separador universal y limpieza de letras
-            listaArticulos = textArticulos.split(/[\r\n, \t]+/).map(s => s.replace(/\D/g,'')).filter(s => s !== '').map(a => safeInt(a));
+            listaArticulos = textArticulos.split(/[\r\n, \t]+/).map(s => s.replace(/\D/g, '')).filter(s => s !== '').map(a => safeInt(a));
             if (listaArticulos.length === 0) { showNotification("¡Indica qué artículos borrar!"); return; }
         }
 
@@ -280,18 +284,18 @@ export function generarSQLBorrar() {
         }
 
         let busq1 = document.getElementById('busq1_del').value.trim();
-        
+
         // Estandarización: Control estricto de filtro vacío
         let inputBusq1 = document.getElementById('busq1_del');
         if (!isExcel && !busq1) {
             if (!confirm("⚠️ ATENCIÓN: No has puesto Filtro de Grupo.\nSe borrarán estos artículos de TODOS los grupos en las tiendas seleccionadas.\n¿Estás seguro?")) {
-                if(inputBusq1) { inputBusq1.classList.add('input-error'); inputBusq1.focus(); }
+                if (inputBusq1) { inputBusq1.classList.add('input-error'); inputBusq1.focus(); }
                 return;
             }
-        } 
+        }
         if (inputBusq1) inputBusq1.classList.remove('input-error');
         if (!isExcel && busq1) agregarHistorial(busq1);
-        
+
         let busq2 = document.getElementById('busq2_del').value.trim();
         let tipo = document.getElementById('tipoBusqueda_del').value;
         let campoSQL = obtenerCampoSQL('campoBusqueda_del');
@@ -300,7 +304,7 @@ export function generarSQLBorrar() {
         let b1 = isExcel ? '%' : sqlEscape(processTxt(busq1));
         let b2 = isExcel ? '%' : ((tipo === 'exact') ? '%' : sqlEscape(processTxt(busq2)));
         let strTiendas = listaTiendas.join(',');
-        
+
         let unionAll = ""; let unionGroups = "";
 
         if (isExcel) {
@@ -328,7 +332,7 @@ export function generarSQLBorrar() {
 
         if (isExcel) {
             sqlAudit = `SELECT 'SE BORRARÁ' as Accion, G.nombre as Grupo, G.idGrupo, D.idRestaurante, D.idEmpresa, D.idArticulo, D.orden, MA.descripcion_principal as Nombre_Articulo \nFROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN (${unionAll}) Listado ON D.idArticulo = Listado.idArticulo AND ${campoSQL} LIKE Listado.Busq1 \nLEFT JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas});`;
-            sqlReorder = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE R.codigo IN (${strTiendas}) \n        AND EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSQL} LIKE ListadoGrupos.Busq1) \n        AND MA.situacion <> 'B' \n        AND D.idArticulo NOT IN (${listaIn}) \n        ORDER BY D.idRestaurante, D.idEmpresa, D.idGrupo, COALESCE(D.orden, 999999) ASC, D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nINNER JOIN ( \n    SELECT DISTINCT D2.idRestaurante, D2.idEmpresa, D2.idGrupo \n    FROM fo_desglose D2 \n    INNER JOIN fo_grupos G2 ON G2.idGrupo = D2.idGrupo AND G2.idRestaurante = D2.idRestaurante AND G2.idEmpresa = D2.idEmpresa \n    INNER JOIN (${unionAll}) L2 ON D2.idArticulo = L2.idArticulo AND ${campoSQL.replace('G.','G2.')} LIKE L2.Busq1 \n    WHERE D2.idRestaurante IN (${strTiendas}) \n) Afectados ON Destino.idRestaurante = Afectados.idRestaurante AND Destino.idEmpresa = Afectados.idEmpresa AND Destino.idGrupo = Afectados.idGrupo \nSET Destino.orden = Calculado.nuevo_orden;`;
+            sqlReorder = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE R.codigo IN (${strTiendas}) \n        AND EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSQL} LIKE ListadoGrupos.Busq1) \n        AND MA.situacion <> 'B' \n        AND D.idArticulo NOT IN (${listaIn}) \n        ORDER BY D.idRestaurante, D.idEmpresa, D.idGrupo, COALESCE(D.orden, 999999) ASC, D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nINNER JOIN ( \n    SELECT DISTINCT D2.idRestaurante, D2.idEmpresa, D2.idGrupo \n    FROM fo_desglose D2 \n    INNER JOIN fo_grupos G2 ON G2.idGrupo = D2.idGrupo AND G2.idRestaurante = D2.idRestaurante AND G2.idEmpresa = D2.idEmpresa \n    INNER JOIN (${unionAll}) L2 ON D2.idArticulo = L2.idArticulo AND ${campoSQL.replace('G.', 'G2.')} LIKE L2.Busq1 \n    WHERE D2.idRestaurante IN (${strTiendas}) \n) Afectados ON Destino.idRestaurante = Afectados.idRestaurante AND Destino.idEmpresa = Afectados.idEmpresa AND Destino.idGrupo = Afectados.idGrupo \nSET Destino.orden = Calculado.nuevo_orden;`;
             sqlDelete = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN (${unionAll}) Listado ON D.idArticulo = Listado.idArticulo AND ${campoSQL} LIKE Listado.Busq1 \nWHERE R.codigo IN (${strTiendas});`;
         } else {
             sqlAudit = `SELECT 'SE BORRARA' as Accion, G.nombre as Grupo, G.idGrupo, D.idRestaurante, D.idEmpresa, D.idArticulo, D.orden, MA.descripcion_principal as Nombre_Articulo \nFROM fo_desglose D \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \nLEFT JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \nWHERE D.idArticulo IN (${listaIn}) \nAND D.idRestaurante IN (${strTiendas}) \nAND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''};`;
@@ -345,11 +349,11 @@ export function generarSQLBorrar() {
         document.getElementById('dq_reorder').textContent = sqlReorder;
         document.getElementById('dq_delete').textContent = deleteScript;
         document.getElementById('dq_rollback').textContent = sqlRollback;
-        
-        if(window.Prism) ['dq_audit','dq_reorder','dq_delete','dq_rollback'].forEach(id => Prism.highlightElement(document.getElementById(id)));
+
+        if (window.Prism) ['dq_audit', 'dq_reorder', 'dq_delete', 'dq_rollback'].forEach(id => Prism.highlightElement(document.getElementById(id)));
 
         document.getElementById('res-delete').style.display = 'block';
-        document.getElementById('res-delete').scrollIntoView({behavior: "smooth"});
+        document.getElementById('res-delete').scrollIntoView({ behavior: "smooth" });
     } catch (error) {
         console.error("Ejecución SQL detenida por seguridad:", error);
     }
@@ -359,8 +363,8 @@ export function generarSQLSwap() {
     try {
         let isExcel = document.querySelector('input[name="modo_swap"]:checked').value === 'excel';
         let pairs = [];
-        let allNewIds = []; 
-        
+        let allNewIds = [];
+
         if (isExcel) {
             let validData = state.excel.swap.data.filter(d => d.valid && !d.duplicate && !d.conflict);
             if (validData.length === 0) { showNotification("¡Faltan pares válidos!"); return; }
@@ -388,7 +392,7 @@ export function generarSQLSwap() {
         }
 
         if (pairs.length === 0) { showNotification("Introduce al menos un par de artículos."); return; }
-        
+
         // Estandarización: Límite de seguridad de lotes
         if (pairs.length > 500) {
             showNotification("⚠️ Límite excedido: Procesa un máximo de 500 pares de intercambio por lote.");
@@ -403,12 +407,12 @@ export function generarSQLSwap() {
         let inputBusq1 = document.getElementById('busq1_swap');
 
         // Estandarización: Control estricto de filtro vacío
-        if(!busq1) { 
-            if(!confirm("⚠️ ATENCIÓN: No has puesto Filtro de Grupo.\nSe intercambiarán en TODOS los grupos de las tiendas seleccionadas.\n¿Seguro?")) {
-                if(inputBusq1) { inputBusq1.classList.add('input-error'); inputBusq1.focus(); }
+        if (!busq1) {
+            if (!confirm("⚠️ ATENCIÓN: No has puesto Filtro de Grupo.\nSe intercambiarán en TODOS los grupos de las tiendas seleccionadas.\n¿Seguro?")) {
+                if (inputBusq1) { inputBusq1.classList.add('input-error'); inputBusq1.focus(); }
                 return;
             }
-        } 
+        }
         if (inputBusq1) inputBusq1.classList.remove('input-error');
         if (busq1) agregarHistorial(busq1);
 
@@ -426,13 +430,13 @@ export function generarSQLSwap() {
             if (index === 0) unionPairs += `SELECT '${pair.old}' as idViejo, '${pair.new}' as idNuevo`;
             else unionPairs += `\n    UNION ALL SELECT '${pair.old}', '${pair.new}'`;
         });
-        
+
         let unionNewIds = "";
         allNewIds.forEach((id, index) => {
             if (index === 0) unionNewIds += `SELECT '${id}' as idArticulo`;
             else unionNewIds += `\n    UNION ALL SELECT '${id}'`;
         });
-        
+
         let newIdsIn = allNewIds.map(a => `'${a}'`).join(',');
 
         let auditEspecifico = document.getElementById('auditGrupoEspecificoSwap') && document.getElementById('auditGrupoEspecificoSwap').checked;
@@ -553,12 +557,12 @@ export function generarSQLSwap() {
         document.getElementById('sq_full').textContent = wrapTransaction(sqlScript, 'safeModeSwap');
         document.getElementById('sq_check').textContent = sqlCheck;
         document.getElementById('sq_rollback').textContent = sqlRollback;
-        
-        if(window.Prism) ['sq_audit','sq_full','sq_check','sq_rollback'].forEach(id => Prism.highlightElement(document.getElementById(id)));
+
+        if (window.Prism) ['sq_audit', 'sq_full', 'sq_check', 'sq_rollback'].forEach(id => Prism.highlightElement(document.getElementById(id)));
 
         document.getElementById('time-swap').innerText = `(Generado: ${new Date().toLocaleTimeString()})`;
         document.getElementById('res-swap').style.display = 'block';
-        document.getElementById('res-swap').scrollIntoView({behavior: "smooth"});
+        document.getElementById('res-swap').scrollIntoView({ behavior: "smooth" });
     } catch (error) {
         console.error("Ejecución SQL detenida por seguridad:", error);
     }
@@ -586,22 +590,22 @@ export function generarSQLReparar() {
         let sqlBackup = `SELECT D.* FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \nAND MA.situacion = 'B';`;
 
         const sqlDelete = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \nAND MA.situacion = 'B';`;
-        
+
         const sqlUpdate = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendas}) \n        AND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \n        AND MA.situacion <> 'B' \n        ORDER BY \n            D.idRestaurante, D.idEmpresa, D.idGrupo, \n            COALESCE(D.orden, 999999) ASC, \n            D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden;`;
-        
+
         const sqlCheck = `SELECT R.nombre as Tienda, G.nombre as Grupo, G.idGrupo, D.idArticulo, D.orden, MA.situacion \nFROM maeres R \nJOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa \nJOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nJOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \nORDER BY R.codigo, G.nombre, D.orden;`;
 
         let fullScript = wrapTransaction(sqlBackup + "\n\n" + sqlDelete + "\n\n" + sqlUpdate, 'safeModeRepair');
 
-        document.getElementById('rq_delete').textContent = fullScript; 
-        document.getElementById('rq_update').textContent = sqlUpdate; 
+        document.getElementById('rq_delete').textContent = fullScript;
+        document.getElementById('rq_update').textContent = sqlUpdate;
         document.getElementById('rq_check').textContent = sqlCheck;
-        
-        if(window.Prism) ['rq_delete','rq_update','rq_check'].forEach(id => Prism.highlightElement(document.getElementById(id)));
+
+        if (window.Prism) ['rq_delete', 'rq_update', 'rq_check'].forEach(id => Prism.highlightElement(document.getElementById(id)));
 
         document.getElementById('time-repair').innerText = `(Generado: ${new Date().toLocaleTimeString()})`;
         document.getElementById('res-repair').style.display = 'block';
-        document.getElementById('res-repair').scrollIntoView({behavior: "smooth"});
+        document.getElementById('res-repair').scrollIntoView({ behavior: "smooth" });
     } catch (error) {
         console.error("Ejecución SQL detenida por seguridad:", error);
     }
@@ -614,7 +618,7 @@ export function generarAddPlantillas() {
 
         const extraCols = "subfamilia, cajas, unidades, unidades_horario1, unidades_horario2, unidades_horario3, unidades_horario4, unidades_horario5, precio, orden, contacto, unidades_dia_1, unidades_dia_2, unidades_dia_3, unidades_dia_4, unidades_dia_5, unidades_dia_6, unidades_dia_7, tipo_stock_ideal, unidades_caja";
         const extraZeros = "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0";
-        
+
         const caseEstado = `CASE \n        WHEN c.codigo IS NULL THEN 'ERROR: NO HAY PLANTILLA'\n        WHEN MA.codigo IS NULL THEN 'ERROR: NO COPIADO'\n        WHEN MA.situacion = 'B' THEN 'FALTA (BAJA)'\n        WHEN d.articulo IS NOT NULL THEN 'OK' \n        ELSE 'FALTA' \n    END AS Estado`;
         const caseEstadoCod = `CASE \n        WHEN c.codigo IS NULL THEN 'ERROR: PLANTILLA INVÁLIDA'\n        WHEN MA.codigo IS NULL THEN 'ERROR: NO COPIADO'\n        WHEN MA.situacion = 'B' THEN 'FALTA (BAJA)'\n        WHEN d.articulo IS NOT NULL THEN 'OK' \n        ELSE 'FALTA' \n    END AS Estado`;
 
@@ -636,7 +640,7 @@ export function generarAddPlantillas() {
             }).join('\n        OR ');
 
             sql = listaArticulos.map(art => `INSERT IGNORE INTO detplantilla (codigo, articulo, stock_ideal, ${extraCols})\nSELECT c.codigo, ${art}, ${stock}, ${extraZeros}, COALESCE(MA1.tipo_venta_central, ''), COALESCE(MA1.unid_caja, 0)\nFROM cabplantilla c\nLEFT JOIN maeart MA1 ON MA1.codigo = ${art} AND MA1.empresa = 1\nWHERE c.situacion = 'A'\n    AND (\n        ${orConds}\n    )\n    AND NOT EXISTS (SELECT 1 FROM detplantilla d WHERE d.codigo = c.codigo AND d.articulo = ${art});\n`).join('\n');
-            
+
             let unionTiendas = listaTiendas.map((dbId, idx) => {
                 const sObj = state.tiendasData.find(t => t.id === dbId);
                 let tNum = sObj.name.split(' - ')[0].trim();
@@ -660,8 +664,8 @@ export function generarAddPlantillas() {
 
         } else if (modo === 'excel_tienda') {
             let data = state.excel.p_add.data.filter(d => d.valid && !d.duplicate);
-            if(data.length === 0) return showNotification("⚠️ Faltan datos en el Excel.");
-            
+            if (data.length === 0) return showNotification("⚠️ Faltan datos en el Excel.");
+
             data.forEach(d => {
                 let cleanNum = d.tienda.toString().trim();
                 let dbId = excepcionesTiendas[cleanNum] || null;
@@ -669,13 +673,13 @@ export function generarAddPlantillas() {
                     const regexTienda = new RegExp(`^${cleanNum}(\\D|$)`, 'i');
                     const match = state.tiendasData.find(t => regexTienda.test(t.name) || t.id === cleanNum);
                     if (match) dbId = match.id;
-                    else dbId = safeInt(cleanNum); 
+                    else dbId = safeInt(cleanNum);
                 }
-                
+
                 let art = safeInt(d.art);
                 let stock = safeInt(d.stock);
                 let safeProv = sqlEscape(d.prov).replace(/\s+/g, '%');
-                
+
                 sql += `INSERT IGNORE INTO detplantilla (codigo, articulo, stock_ideal, ${extraCols})\nSELECT c.codigo, ${art}, ${stock}, ${extraZeros}, COALESCE(MA1.tipo_venta_central, ''), COALESCE(MA1.unid_caja, 0)\nFROM cabplantilla c\nLEFT JOIN maeart MA1 ON MA1.codigo = ${art} AND MA1.empresa = 1\nWHERE c.situacion = 'A'\nAND c.nombre LIKE '%(T${cleanNum})%${safeProv}%'\nAND NOT EXISTS (SELECT 1 FROM detplantilla d WHERE d.codigo = c.codigo AND d.articulo = ${art});\n\n`;
             });
 
@@ -701,20 +705,20 @@ export function generarAddPlantillas() {
 
             let uniqueArts = [...new Set(data.map(d => safeInt(d.art)))];
             let unionArticulosOthers = uniqueArts.map((art, idx) => idx === 0 ? `SELECT '${sqlEscape(art)}' AS idArt` : ` UNION ALL SELECT '${sqlEscape(art)}'`).join('');
-            
+
             let storeDataOthers = data.map(d => {
                 let cleanNum = d.tienda.toString().trim();
                 let dbId = excepcionesTiendas[cleanNum] || null;
                 if (!dbId) {
                     const match = state.tiendasData.find(t => new RegExp(`^${cleanNum}(\\D|$)`, 'i').test(t.name) || t.id === cleanNum);
-                    dbId = match ? match.id : safeInt(cleanNum); 
+                    dbId = match ? match.id : safeInt(cleanNum);
                 }
                 return { e_cod: dbId, t_num: cleanNum };
             });
-            
+
             let uniqueStoresMap = new Map();
             storeDataOthers.forEach(s => uniqueStoresMap.set(s.e_cod, s.t_num));
-            
+
             let unionTiendasOthers = Array.from(uniqueStoresMap.entries()).map(([e_cod, t_num], idx) => {
                 return idx === 0 ? `SELECT '${e_cod}' AS e_cod, '${t_num}' AS t_num` : ` UNION ALL SELECT '${e_cod}', '${t_num}'`;
             }).join('');
@@ -723,18 +727,18 @@ export function generarAddPlantillas() {
 
         } else {
             let data = state.excel.p_add.data.filter(d => d.valid && !d.duplicate);
-            if(data.length === 0) return showNotification("⚠️ Faltan datos en el Excel.");
+            if (data.length === 0) return showNotification("⚠️ Faltan datos en el Excel.");
 
-            let batchSize = 500; 
+            let batchSize = 500;
             for (let i = 0; i < data.length; i += batchSize) {
                 let chunk = data.slice(i, i + batchSize);
                 let unionTemp = chunk.map((d, idx) => {
                     return idx === 0 ? `SELECT '${safeInt(d.cod)}' AS cod, '${safeInt(d.art)}' AS art, '${safeInt(d.stock)}' AS stock` : ` UNION ALL SELECT '${safeInt(d.cod)}', '${safeInt(d.art)}', '${safeInt(d.stock)}'`;
                 }).join('');
-                
+
                 sql += `INSERT IGNORE INTO detplantilla (codigo, articulo, stock_ideal, ${extraCols})\nSELECT Temp.cod, Temp.art, Temp.stock, ${extraZeros}, COALESCE(MA1.tipo_venta_central, ''), COALESCE(MA1.unid_caja, 0)\nFROM (\n    ${unionTemp}\n) Temp\nLEFT JOIN maeart MA1 ON MA1.codigo = Temp.art AND MA1.empresa = 1\nWHERE NOT EXISTS (SELECT 1 FROM detplantilla d WHERE d.codigo = Temp.cod AND d.articulo = Temp.art);\n\n`;
             }
-            
+
             let unionIdealCod = data.map((d, idx) => {
                 if (idx === 0) return `SELECT '${safeInt(d.cod)}' AS cod, '${safeInt(d.art)}' AS idArticulo, '${safeInt(d.stock)}' AS stock`;
                 return ` UNION ALL SELECT '${safeInt(d.cod)}', '${safeInt(d.art)}', '${safeInt(d.stock)}'`;
@@ -744,10 +748,10 @@ export function generarAddPlantillas() {
 
             let uniqueArts = [...new Set(data.map(d => safeInt(d.art)))];
             let unionArticulosOthers = uniqueArts.map((art, idx) => idx === 0 ? `SELECT '${sqlEscape(art)}' AS idArt` : ` UNION ALL SELECT '${sqlEscape(art)}'`).join('');
-            
+
             let uniqueCods = [...new Set(data.map(d => safeInt(d.cod)))];
             let codsIn = uniqueCods.join(', ');
-            
+
             let unionTiendasOthers = `SELECT DISTINCT m.empresa AS e_cod, SUBSTRING_INDEX(SUBSTRING_INDEX(c.nombre, '(T', -1), ')', 1) AS t_num FROM cabplantilla c INNER JOIN maecli m ON m.codigo = c.cliente WHERE c.codigo IN (${codsIn})`;
 
             othersSql = `SELECT DISTINCT \n    ListaTiendas.t_num AS 'Nº Tienda', \n    COALESCE(Existentes.codigo, '---') AS Codigo_Plantilla, \n    CASE \n        WHEN HayPlantilla.t_num IS NULL THEN '---' \n        WHEN Existentes.codigo IS NULL THEN 'NO INCLUIDA EN NINGUNA' \n        ELSE Existentes.nombre \n    END AS Nombre_Plantilla, \n    ListaArt.idArt AS Articulo, \n    COALESCE(MA.descripcion_principal, 'NO COPIADO') AS Descripcion, \n    COALESCE(Existentes.stock_ideal, 0) AS Stock, \n    CASE \n        WHEN HayPlantilla.t_num IS NULL THEN 'ERROR: NO TIENE PLANTILLAS'\n        WHEN MA.codigo IS NULL THEN 'ERROR: NO COPIADO EN EMPRESA'\n        WHEN MA.situacion = 'B' THEN 'FALTA (BAJA)'\n        WHEN Existentes.codigo IS NOT NULL THEN 'OK'\n        ELSE 'FALTA'\n    END AS Estado\nFROM (\n    ${unionTiendasOthers}\n) ListaTiendas\nCROSS JOIN (\n    ${unionArticulosOthers}\n) ListaArt\nLEFT JOIN (\n    SELECT DISTINCT SUBSTRING_INDEX(SUBSTRING_INDEX(nombre, '(T', -1), ')', 1) AS t_num \n    FROM cabplantilla WHERE situacion = 'A'\n) HayPlantilla ON HayPlantilla.t_num = ListaTiendas.t_num\nLEFT JOIN maeart MA ON MA.codigo = ListaArt.idArt AND MA.empresa = ListaTiendas.e_cod\nLEFT JOIN (\n    SELECT d2.articulo, d2.stock_ideal, c2.codigo, c2.nombre\n    FROM detplantilla d2\n    INNER JOIN cabplantilla c2 ON c2.codigo = d2.codigo\n    WHERE c2.situacion = 'A'\n) AS Existentes ON Existentes.articulo = ListaArt.idArt AND Existentes.nombre LIKE CONCAT('%(T', ListaTiendas.t_num, ')%')\nORDER BY Estado ASC, ListaTiendas.t_num, Existentes.nombre, ListaArt.idArt;`;
@@ -756,7 +760,7 @@ export function generarAddPlantillas() {
         inyectarSQLPlantillas('res-add', 'out-add', wrapTransactionPlantillas(sql.trim()));
         inyectarSQLPlantillas('res-add', 'out-add-audit', auditSql);
         inyectarSQLPlantillas('res-add', 'out-add-others', othersSql);
-        
+
         showNotification(`✅ Consultas generadas.`);
     } catch (error) {
         console.error("Ejecución SQL detenida por seguridad:", error);
@@ -804,8 +808,8 @@ export function generarDelExcelPlantillas() {
 
         } else if (modo === 'excel_tienda') {
             let data = state.excel.p_del.data.filter(d => d.valid && !d.duplicate);
-            if(data.length === 0) return showNotification("⚠️ Faltan datos en el Excel.");
-            
+            if (data.length === 0) return showNotification("⚠️ Faltan datos en el Excel.");
+
             data.forEach(d => {
                 let cleanNum = d.tienda.toString().trim();
                 let dbId = excepcionesTiendas[cleanNum] || null;
@@ -813,12 +817,12 @@ export function generarDelExcelPlantillas() {
                     const regexTienda = new RegExp(`^${cleanNum}(\\D|$)`, 'i');
                     const match = state.tiendasData.find(t => regexTienda.test(t.name) || t.id === cleanNum);
                     if (match) dbId = match.id;
-                    else dbId = safeInt(cleanNum); 
+                    else dbId = safeInt(cleanNum);
                 }
-                
+
                 let art = safeInt(d.art);
                 let safeProv = sqlEscape(d.prov).replace(/\s+/g, '%');
-                
+
                 sql += `DELETE d FROM detplantilla d\nINNER JOIN cabplantilla c ON d.codigo = c.codigo\nWHERE d.articulo = ${art}\nAND c.situacion = 'A'\nAND c.nombre LIKE '%(T${cleanNum})%${safeProv}%';\n\n`;
             });
 
@@ -843,15 +847,15 @@ export function generarDelExcelPlantillas() {
 
         } else {
             let data = state.excel.p_del.data.filter(d => d.valid && !d.duplicate);
-            if(data.length === 0) return showNotification("⚠️ Faltan datos en el Excel.");
+            if (data.length === 0) return showNotification("⚠️ Faltan datos en el Excel.");
 
-            let batchSize = 1000; 
+            let batchSize = 1000;
             let values = data.map(d => `(d.codigo = ${safeInt(d.cod)} AND d.articulo = ${safeInt(d.art)})`);
-            
+
             for (let i = 0; i < values.length; i += batchSize) {
                 sql += `DELETE d FROM detplantilla d WHERE ` + values.slice(i, i + batchSize).join(" OR ") + `;\n\n`;
             }
-            
+
             let unionIdealCod = data.map((d, idx) => {
                 if (idx === 0) return `SELECT '${safeInt(d.cod)}' AS cod, '${safeInt(d.art)}' AS idArticulo`;
                 return ` UNION ALL SELECT '${safeInt(d.cod)}', '${safeInt(d.art)}'`;
@@ -873,7 +877,7 @@ export function generarVaciarPlantillas(codigosRaw) {
     try {
         let codigos = [...new Set(codigosRaw)].map(c => safeInt(c));
         if (codigos.length === 0) return { error: "⚠️ Introduce códigos válidos." };
-        
+
         let sql = `DELETE FROM detplantilla WHERE codigo IN (${codigos.join(', ')});`;
         let auditSql = `SELECT * FROM detplantilla WHERE codigo IN (${codigos.join(', ')});`;
 
@@ -890,8 +894,8 @@ export function generarVaciarPlantillas(codigosRaw) {
 export function generarUpdateNombrePlantillas() {
     try {
         let data = state.excel.p_upd.data.filter(d => d.valid && !d.duplicate);
-        if(data.length === 0) return showNotification("⚠️ Faltan datos o cabeceras válidas.");
-        
+        if (data.length === 0) return showNotification("⚠️ Faltan datos o cabeceras válidas.");
+
         let sql = data.map(d => `UPDATE cabplantilla SET nombre = '${sqlEscape(d.nombre)}' WHERE codigo = ${safeInt(d.cod)};`).join('\n');
         inyectarSQLPlantillas('res-update', 'out-update', wrapTransactionPlantillas(sql));
         showNotification("✅ Consultas UPDATE masivas generadas.");
@@ -904,7 +908,7 @@ export function generarConsultaPlantillas() {
     try {
         let provRaw = document.getElementById('cons-prov').value.trim();
         let clientesRaw = document.getElementById('cons-clientes').value.split(/[\r\n,]+/).map(s => s.trim()).filter(s => s !== '');
-        
+
         if (!provRaw || clientesRaw.length === 0) return showNotification("⚠️ Debes indicar el ID del Proveedor y Clientes.");
 
         let prov = safeInt(provRaw);
@@ -912,7 +916,7 @@ export function generarConsultaPlantillas() {
 
         let sql = `SELECT \n    c.codigo, \n    c.nombre, \n    d.articulo, \n    d.stock_ideal,\n    c.cliente\nFROM \n    cabplantilla c\nINNER JOIN \n    detplantilla d ON c.codigo = d.codigo\nWHERE \n    c.situacion = 'A'\n    AND c.proveedor = ${prov}\n    AND c.cliente IN (\n        ${clientes.join(', ')}\n    );`;
         inyectarSQLPlantillas('res-consulta', 'out-consulta', sql);
-        
+
         document.getElementById('out-consulta').dataset.fullSql = "MEM_CACHE";
         window.fullSqlCache = window.fullSqlCache || {};
         window.fullSqlCache['out-consulta'] = sql;
@@ -926,14 +930,14 @@ export function generarConsultaPlantillas() {
 export function copiarMasivo(btn) {
     const activeTab = document.querySelector('.app-section.active .tab-content.active');
     if (!activeTab) { showNotification("No hay pestaña activa."); return; }
-    
+
     const outputSections = activeTab.querySelectorAll('.output-section');
     let hasVisibleContent = false;
     let fullText = "";
-    
+
     let tabId = activeTab.id;
     let cleanCheckboxId = '';
-    
+
     // TPVs
     if (tabId === 'tab-masivo') cleanCheckboxId = 'cleanCopyMass';
     else if (tabId === 'tab-borrar') cleanCheckboxId = 'cleanCopyDel';
@@ -944,21 +948,21 @@ export function copiarMasivo(btn) {
     else if (tabId === 'tab-excel-del') cleanCheckboxId = 'cleanCopyDelPlantillas';
     else if (tabId === 'tab-vaciar') cleanCheckboxId = 'cleanCopyVaciarPlantillas';
     else if (tabId === 'tab-consulta') cleanCheckboxId = 'cleanCopyConsultaPlantillas';
-    
+
     let isCleanCopy = document.getElementById(cleanCheckboxId) && document.getElementById(cleanCheckboxId).checked;
 
     outputSections.forEach(outputSection => {
         if (outputSection.style.display !== 'none' && outputSection.style.display !== '') {
             hasVisibleContent = true;
             const codeBlocks = outputSection.querySelectorAll('code[class*="language-sql"]');
-            
+
             codeBlocks.forEach((block, index) => {
                 if (!isCleanCopy) {
                     const header = block.closest('.accordion-item')?.querySelector('.accordion-header');
                     const title = header ? header.innerText : 'CONSULTA';
                     fullText += `-- [ ${title} ] --\n`;
                 }
-                
+
                 let blockSql = (window.fullSqlCache && window.fullSqlCache[block.id]) ? window.fullSqlCache[block.id] : (block.dataset.fullSql || block.textContent);
                 fullText += blockSql + "\n\n";
             });
@@ -973,9 +977,9 @@ export function descargarSQL(type) {
     let content = "";
     let groupName = document.getElementById('busq1')?.value || document.getElementById('busq1_del')?.value || document.getElementById('busq1_swap')?.value || document.getElementById('busq1_repair')?.value || "Global";
     groupName = groupName.replace(/[^a-zA-Z0-9]/g, '_');
-    
-    let filename = `${type}_${groupName}_${new Date().toISOString().slice(0,10)}.sql`;
-    
+
+    let filename = `${type}_${groupName}_${new Date().toISOString().slice(0, 10)}.sql`;
+
     // TPVs
     if (type === 'mass') {
         if (!document.getElementById('mq1').textContent) { showNotification("Genera primero"); return; }
@@ -1015,7 +1019,7 @@ export function descargarSQL(type) {
         let upd = (window.fullSqlCache && window.fullSqlCache['out-update']) || document.getElementById('out-update').textContent;
         content = sel + "\n\n" + upd;
     }
-    
+
     if (!content || content.trim() === "") { showNotification("⚠️ Genera las consultas primero."); return; }
 
     const blob = new Blob([content], { type: 'text/sql' });
@@ -1047,7 +1051,7 @@ export function generarGruposTPV() {
             showNotification("⚠️ El campo ID es obligatorio.");
             return;
         }
-        
+
         if (accion !== 'DELETE' && !nombreFront) {
             showNotification("⚠️ El Nombre Front Office es obligatorio para crear o actualizar.");
             return;
@@ -1122,7 +1126,7 @@ export function generarGruposTPV() {
 
         document.getElementById('out-grupos').textContent = fullScript;
         document.getElementById('out-grupos-audit').textContent = sqlAudit;
-        
+
         window.fullSqlCache = window.fullSqlCache || {};
         window.fullSqlCache['out-grupos'] = fullScript;
         window.fullSqlCache['out-grupos-audit'] = sqlAudit;
@@ -1134,11 +1138,12 @@ export function generarGruposTPV() {
 
         document.getElementById('res-grupos').style.display = 'block';
         document.getElementById('time-grupos').textContent = `(Generado: ${new Date().toLocaleTimeString()})`;
-        document.getElementById('res-grupos').scrollIntoView({behavior: "smooth"});
+        document.getElementById('res-grupos').scrollIntoView({ behavior: "smooth" });
         showNotification("✅ SQL de Jerarquía generado exitosamente.");
 
     } catch (error) {
         console.error("Ejecución SQL detenida por seguridad:", error);
         showNotification("⚠️ Error al generar SQL. Revisa la consola.");
     }
+
 }

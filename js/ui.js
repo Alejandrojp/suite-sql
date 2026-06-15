@@ -481,7 +481,7 @@ export function actualizarContadorArticulosGenerico(inputId, counterId) {
     let items = val.split(/[\r\n,]+/).filter(s => s.trim() !== '');
     badge.textContent = items.length + ' artículos';
     
-    let haySospechosos = items.some(id => id.length < 4 || id.length > 6); 
+    let haySospechosos = items.some(id => id.length < 3 || id.length > 6); 
     if(haySospechosos) {
         textarea.style.borderColor = "#e74c3c"; 
         textarea.style.backgroundColor = "rgba(231, 76, 60, 0.05)";
