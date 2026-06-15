@@ -112,8 +112,8 @@ export function generarSQLMasivo() {
             if (listaTiendas.length === 0) { showNotification("¡Selecciona tiendas!"); return; }
         }
 
-        if (listaArticulos.length > 500) {
-            showNotification("⚠️ Límite excedido: Procesa un máximo de 500 artículos por lote para evitar bloqueos en la base de datos.");
+        if (listaArticulos.length > 3000) {
+            showNotification("⚠️ Límite excedido: Procesa un máximo de 3000 artículos por lote para evitar bloqueos en la base de datos.");
             return;
         }
 
@@ -277,12 +277,10 @@ export function generarSQLBorrar() {
         let listaTiendas = Array.from(checkedBoxes).map(cb => safeInt(cb.value));
         if (listaTiendas.length === 0) { showNotification("¡Selecciona tiendas!"); return; }
 
-        // Estandarización: Límite de seguridad de lotes
-        if (listaArticulos.length > 500) {
-            showNotification("⚠️ Límite excedido: Procesa un máximo de 500 artículos por lote para evitar bloqueos.");
+        if (listaArticulos.length > 3000) {
+            showNotification("⚠️ Límite excedido: Procesa un máximo de 3000 artículos por lote para evitar bloqueos.");
             return;
         }
-
         let busq1 = document.getElementById('busq1_del').value.trim();
 
         // Estandarización: Control estricto de filtro vacío
@@ -398,9 +396,8 @@ export function generarSQLSwap() {
 
         if (pairs.length === 0) { showNotification("Introduce al menos un par de artículos."); return; }
 
-        // Estandarización: Límite de seguridad de lotes
-        if (pairs.length > 500) {
-            showNotification("⚠️ Límite excedido: Procesa un máximo de 500 pares de intercambio por lote.");
+        if (pairs.length > 3000) {
+            showNotification("⚠️ Límite excedido: Procesa un máximo de 3000 pares de intercambio por lote.");
             return;
         }
 
