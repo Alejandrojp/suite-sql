@@ -209,9 +209,9 @@ export function generarSQLMasivo() {
 
         state.generatedQueries.mq0 = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \n${deleteWhere} \nAND MA.situacion = 'B';`;
 
-        state.generatedQueries.mq1 = `SELECT R.codigo, R.nombre, ListadoMasivo.idArticulo, G.nombre, G.idGrupo, MA.situacion \n${fromJoin1} \nINNER JOIN fo_grupos G ON G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nINNER JOIN maeart MA ON MA.codigo = ListadoMasivo.idArticulo AND MA.empresa = R.empresa \nWHERE ${campoSQL} LIKE ListadoMasivo.Busq1 AND ${campoSQL} LIKE ListadoMasivo.Busq2 \nAND R.codigo IN (${strTiendas}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = ListadoMasivo.idArticulo AND D.idGrupo = G.idGrupo) \nORDER BY R.codigo, ListadoMasivo.idArticulo;`;
+        state.generatedQueries.mq1 = `SELECT R.codigo, R.nombre, ListadoMasivo.idArticulo, G.nombre, G.idGrupo, MA.situacion \n${fromJoin1} \nINNER JOIN fo_grupos G ON G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nINNER JOIN maeart MA ON MA.codigo = ListadoMasivo.idArticulo AND MA.empresa = R.empresa \nWHERE ${campoSQL} ${compareOp} ListadoMasivo.Busq1 AND ${campoSQL} ${compareOp} ListadoMasivo.Busq2 \nAND R.codigo IN (${strTiendas}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = ListadoMasivo.idArticulo AND D.idGrupo = G.idGrupo) \nORDER BY R.codigo, ListadoMasivo.idArticulo;`;
 
-        state.generatedQueries.mq2 = `INSERT INTO fo_desglose (idRestaurante, idEmpresa, idGrupo, idArticulo) \nSELECT R.codigo, R.empresa, G.idGrupo, Listado.idArticulo \n${fromJoin2} \nINNER JOIN fo_grupos G ON G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nINNER JOIN maeart MA ON MA.codigo = Listado.idArticulo AND MA.empresa = R.empresa \nWHERE ${campoSQL} LIKE Listado.Busq1 AND ${campoSQL} LIKE Listado.Busq2 \nAND R.codigo IN (${strTiendas}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = Listado.idArticulo AND D.idGrupo = G.idGrupo);`;
+        state.generatedQueries.mq2 = `INSERT INTO fo_desglose (idRestaurante, idEmpresa, idGrupo, idArticulo) \nSELECT R.codigo, R.empresa, G.idGrupo, Listado.idArticulo \n${fromJoin2} \nINNER JOIN fo_grupos G ON G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nINNER JOIN maeart MA ON MA.codigo = Listado.idArticulo AND MA.empresa = R.empresa \nWHERE ${campoSQL} ${compareOp} Listado.Busq1 AND ${campoSQL} ${compareOp} Listado.Busq2 \nAND R.codigo IN (${strTiendas}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = Listado.idArticulo AND D.idGrupo = G.idGrupo);`;
 
         state.generatedQueries.mq3 = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa AND G.situacion = 'A' \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendas}) \n        ${reorderWhere} \n        AND MA.situacion <> 'B' \n        ORDER BY \n            D.idRestaurante, D.idEmpresa, D.idGrupo, \n            ${sortPositionSql} \n            CASE D.idArticulo \n${caseUpdate} \n            END ASC, \n            COALESCE(D.orden, 999999) ASC, \n            D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) TablaOrdenada, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden;`;
 
@@ -300,10 +300,15 @@ export function generarSQLBorrar() {
         let tipo = document.getElementById('tipoBusqueda_del').value;
         let campoSQL = obtenerCampoSQL('campoBusqueda_del');
 
-        const processTxt = (v) => (v && tipo === 'contains') ? `%${v}%` : (v || '%');
+        let esBusquedaPorId = campoSQL.includes('idGrupo');
+        if (esBusquedaPorId) tipo = 'exact';
+
+        const processTxt = (v) => (v && tipo === 'contains' && !esBusquedaPorId) ? `%${v}%` : (v || '%');
         let b1 = isExcel ? '%' : sqlEscape(processTxt(busq1));
         let b2 = isExcel ? '%' : ((tipo === 'exact') ? '%' : sqlEscape(processTxt(busq2)));
         let strTiendas = listaTiendas.join(',');
+
+        let compareOp = (tipo === 'exact' || esBusquedaPorId) ? '=' : 'LIKE';
 
         let unionAll = ""; let unionGroups = "";
 
@@ -331,13 +336,13 @@ export function generarSQLBorrar() {
         let sqlAudit, sqlReorder, sqlDelete;
 
         if (isExcel) {
-            sqlAudit = `SELECT 'SE BORRARÁ' as Accion, G.nombre as Grupo, G.idGrupo, D.idRestaurante, D.idEmpresa, D.idArticulo, D.orden, MA.descripcion_principal as Nombre_Articulo \nFROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN (${unionAll}) Listado ON D.idArticulo = Listado.idArticulo AND ${campoSQL} LIKE Listado.Busq1 \nLEFT JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas});`;
-            sqlReorder = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE R.codigo IN (${strTiendas}) \n        AND EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSQL} LIKE ListadoGrupos.Busq1) \n        AND MA.situacion <> 'B' \n        AND D.idArticulo NOT IN (${listaIn}) \n        ORDER BY D.idRestaurante, D.idEmpresa, D.idGrupo, COALESCE(D.orden, 999999) ASC, D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nINNER JOIN ( \n    SELECT DISTINCT D2.idRestaurante, D2.idEmpresa, D2.idGrupo \n    FROM fo_desglose D2 \n    INNER JOIN fo_grupos G2 ON G2.idGrupo = D2.idGrupo AND G2.idRestaurante = D2.idRestaurante AND G2.idEmpresa = D2.idEmpresa \n    INNER JOIN (${unionAll}) L2 ON D2.idArticulo = L2.idArticulo AND ${campoSQL.replace('G.', 'G2.')} LIKE L2.Busq1 \n    WHERE D2.idRestaurante IN (${strTiendas}) \n) Afectados ON Destino.idRestaurante = Afectados.idRestaurante AND Destino.idEmpresa = Afectados.idEmpresa AND Destino.idGrupo = Afectados.idGrupo \nSET Destino.orden = Calculado.nuevo_orden;`;
-            sqlDelete = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN (${unionAll}) Listado ON D.idArticulo = Listado.idArticulo AND ${campoSQL} LIKE Listado.Busq1 \nWHERE R.codigo IN (${strTiendas});`;
+            sqlAudit = `SELECT 'SE BORRARÁ' as Accion, G.nombre as Grupo, G.idGrupo, D.idRestaurante, D.idEmpresa, D.idArticulo, D.orden, MA.descripcion_principal as Nombre_Articulo \nFROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN (${unionAll}) Listado ON D.idArticulo = Listado.idArticulo AND ${campoSQL} ${compareOp} Listado.Busq1 \nLEFT JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas});`;
+            sqlReorder = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE R.codigo IN (${strTiendas}) \n        AND EXISTS (SELECT 1 FROM (${unionGroups}) ListadoGrupos WHERE ${campoSQL} ${compareOp} ListadoGrupos.Busq1) \n        AND MA.situacion <> 'B' \n        AND D.idArticulo NOT IN (${listaIn}) \n        ORDER BY D.idRestaurante, D.idEmpresa, D.idGrupo, COALESCE(D.orden, 999999) ASC, D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nINNER JOIN ( \n    SELECT DISTINCT D2.idRestaurante, D2.idEmpresa, D2.idGrupo \n    FROM fo_desglose D2 \n    INNER JOIN fo_grupos G2 ON G2.idGrupo = D2.idGrupo AND G2.idRestaurante = D2.idRestaurante AND G2.idEmpresa = D2.idEmpresa \n    INNER JOIN (${unionAll}) L2 ON D2.idArticulo = L2.idArticulo AND ${campoSQL.replace('G.', 'G2.')} ${compareOp} L2.Busq1 \n    WHERE D2.idRestaurante IN (${strTiendas}) \n) Afectados ON Destino.idRestaurante = Afectados.idRestaurante AND Destino.idEmpresa = Afectados.idEmpresa AND Destino.idGrupo = Afectados.idGrupo \nSET Destino.orden = Calculado.nuevo_orden;`;
+            sqlDelete = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN (${unionAll}) Listado ON D.idArticulo = Listado.idArticulo AND ${campoSQL} ${compareOp} Listado.Busq1 \nWHERE R.codigo IN (${strTiendas});`;
         } else {
-            sqlAudit = `SELECT 'SE BORRARA' as Accion, G.nombre as Grupo, G.idGrupo, D.idRestaurante, D.idEmpresa, D.idArticulo, D.orden, MA.descripcion_principal as Nombre_Articulo \nFROM fo_desglose D \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \nLEFT JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \nWHERE D.idArticulo IN (${listaIn}) \nAND D.idRestaurante IN (${strTiendas}) \nAND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''};`;
-            sqlReorder = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE R.codigo IN (${strTiendas}) \n        AND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \n        AND MA.situacion <> 'B' \n        AND D.idArticulo NOT IN (${listaIn}) \n        ORDER BY D.idRestaurante, D.idEmpresa, D.idGrupo, COALESCE(D.orden, 999999) ASC, D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nINNER JOIN ( \n    SELECT DISTINCT idRestaurante, idEmpresa, idGrupo \n    FROM fo_desglose \n    WHERE idRestaurante IN (${strTiendas}) AND idArticulo IN (${listaIn}) \n) Afectados ON Destino.idRestaurante = Afectados.idRestaurante AND Destino.idEmpresa = Afectados.idEmpresa AND Destino.idGrupo = Afectados.idGrupo \nSET Destino.orden = Calculado.nuevo_orden;`;
-            sqlDelete = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND D.idArticulo IN (${listaIn}) \nAND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''};`;
+            sqlAudit = `SELECT 'SE BORRARA' as Accion, G.nombre as Grupo, G.idGrupo, D.idRestaurante, D.idEmpresa, D.idArticulo, D.orden, MA.descripcion_principal as Nombre_Articulo \nFROM fo_desglose D \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \nLEFT JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \nWHERE D.idArticulo IN (${listaIn}) \nAND D.idRestaurante IN (${strTiendas}) \nAND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''};`;
+            sqlReorder = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE R.codigo IN (${strTiendas}) \n        AND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''} \n        AND MA.situacion <> 'B' \n        AND D.idArticulo NOT IN (${listaIn}) \n        ORDER BY D.idRestaurante, D.idEmpresa, D.idGrupo, COALESCE(D.orden, 999999) ASC, D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nINNER JOIN ( \n    SELECT DISTINCT idRestaurante, idEmpresa, idGrupo \n    FROM fo_desglose \n    WHERE idRestaurante IN (${strTiendas}) AND idArticulo IN (${listaIn}) \n) Afectados ON Destino.idRestaurante = Afectados.idRestaurante AND Destino.idEmpresa = Afectados.idEmpresa AND Destino.idGrupo = Afectados.idGrupo \nSET Destino.orden = Calculado.nuevo_orden;`;
+            sqlDelete = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND D.idArticulo IN (${listaIn}) \nAND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''};`;
         }
 
         let textBackup = isExcel ? document.getElementById('articulos_excel_del').value.replace(/\r?\n|\r/g, " ") : document.getElementById('articulos_borrar').value.replace(/\r?\n|\r/g, " ");
@@ -420,10 +425,15 @@ export function generarSQLSwap() {
         let tipo = document.getElementById('tipoBusqueda_swap').value;
         let campoSQL = obtenerCampoSQL('campoBusqueda_swap');
 
-        const processTxt = (v) => (v && tipo === 'contains') ? `%${v}%` : (v || '%');
+        let esBusquedaPorId = campoSQL.includes('idGrupo');
+        if (esBusquedaPorId) tipo = 'exact';
+
+        const processTxt = (v) => (v && tipo === 'contains' && !esBusquedaPorId) ? `%${v}%` : (v || '%');
         let b1 = sqlEscape(processTxt(busq1));
         let b2 = (tipo === 'exact') ? '%' : sqlEscape(processTxt(busq2));
         let strTiendas = listaTiendas.join(',');
+
+        let compareOp = (tipo === 'exact' || esBusquedaPorId) ? '=' : 'LIKE';
 
         let unionPairs = "";
         pairs.forEach((pair, index) => {
@@ -440,7 +450,7 @@ export function generarSQLSwap() {
         let newIdsIn = allNewIds.map(a => `'${a}'`).join(',');
 
         let auditEspecifico = document.getElementById('auditGrupoEspecificoSwap') && document.getElementById('auditGrupoEspecificoSwap').checked;
-        let opAuditoria = (tipo === 'exact') ? '=' : 'LIKE';
+        let opAuditoria = (tipo === 'exact' || esBusquedaPorId) ? '=' : 'LIKE';
         let campoSub = campoSQL.replace('G.', 'G2.');
 
         let auditFilter = `AND ${campoSQL} ${opAuditoria} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${opAuditoria} '${b2}'` : ''}`;
@@ -467,7 +477,7 @@ export function generarSQLSwap() {
     LEFT JOIN fo_desglose CheckDest ON CheckDest.idRestaurante = D.idRestaurante AND CheckDest.idEmpresa = D.idEmpresa AND CheckDest.idGrupo = D.idGrupo AND CheckDest.idArticulo = Cambios.idNuevo
     SET D.idArticulo = Cambios.idNuevo
     WHERE R.codigo IN (${strTiendas})
-    AND ${campoSQL} LIKE '${b1}' ${busq2 ? `AND ${campoSQL} LIKE '${b2}'` : ''}
+    AND ${campoSQL} ${compareOp} '${b1}' ${busq2 ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''}
     AND CheckDest.idArticulo IS NULL;
 
     DELETE D 
@@ -477,7 +487,7 @@ export function generarSQLSwap() {
     INNER JOIN (${unionPairs}) Cambios ON D.idArticulo = Cambios.idViejo
     INNER JOIN fo_desglose ExisteNuevo ON ExisteNuevo.idRestaurante = D.idRestaurante AND ExisteNuevo.idEmpresa = D.idGrupo AND ExisteNuevo.idGrupo = D.idGrupo AND ExisteNuevo.idArticulo = Cambios.idNuevo
     WHERE R.codigo IN (${strTiendas})
-    AND ${campoSQL} LIKE '${b1}' ${busq2 ? `AND ${campoSQL} LIKE '${b2}'` : ''};
+    AND ${campoSQL} ${compareOp} '${b1}' ${busq2 ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''};
 
     UPDATE fo_desglose Destino
     INNER JOIN (
@@ -486,7 +496,7 @@ export function generarSQLSwap() {
     INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa
     WHERE D.idArticulo IN (${newIdsIn}) 
     AND D.idRestaurante IN (${strTiendas}) 
-    AND ${campoSQL} LIKE '${b1}' ${busq2 ? `AND ${campoSQL} LIKE '${b2}'` : ''}
+    AND ${campoSQL} ${compareOp} '${b1}' ${busq2 ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''}
     ) GruposAfectados ON Destino.idRestaurante = GruposAfectados.idRestaurante AND Destino.idEmpresa = GruposAfectados.idEmpresa AND Destino.idGrupo = GruposAfectados.idGrupo
     INNER JOIN (
     SELECT idRestaurante, idEmpresa, idGrupo, idArticulo, 
@@ -498,7 +508,7 @@ export function generarSQLSwap() {
         INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa
         INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa
         WHERE D.idRestaurante IN (${strTiendas}) 
-        AND ${campoSQL} LIKE '${b1}' ${busq2 ? `AND ${campoSQL} LIKE '${b2}'` : ''}
+        AND ${campoSQL} ${compareOp} '${b1}' ${busq2 ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''}
         AND MA.situacion <> 'B'
         ORDER BY D.idRestaurante, D.idEmpresa, D.idGrupo, COALESCE(D.orden, 999999) ASC, D.idArticulo ASC
         LIMIT 18446744073709551615
@@ -550,7 +560,7 @@ export function generarSQLSwap() {
     LEFT JOIN fo_desglose CheckOld ON CheckOld.idRestaurante = D.idRestaurante AND CheckOld.idEmpresa = D.idEmpresa AND CheckOld.idGrupo = D.idGrupo AND CheckOld.idArticulo = Reverso.idAnterior
     SET D.idArticulo = Reverso.idAnterior
     WHERE R.codigo IN (${strTiendas})
-    AND ${campoSQL} LIKE '${b1}' ${busq2 ? `AND ${campoSQL} LIKE '${b2}'` : ''}
+    AND ${campoSQL} ${compareOp} '${b1}' ${busq2 ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''}
     AND CheckOld.idArticulo IS NULL;`;
 
         document.getElementById('sq_audit').textContent = sqlAudit;
@@ -571,7 +581,6 @@ export function generarSQLSwap() {
 export function generarSQLReparar() {
     try {
         const checkedBoxes = document.querySelectorAll('#list-repair .store-item input:checked');
-        let listaTiendas = Array.from(checkedBoxes).map(cb => safeInt(cb.value));
         let busq1 = document.getElementById('busq1_repair').value.trim();
         let busq2 = document.getElementById('busq2_repair').value.trim();
         let tipo = document.getElementById('tipoBusqueda_repair').value;
@@ -582,18 +591,24 @@ export function generarSQLReparar() {
         if (busq1) agregarHistorial(busq1);
         if (busq1 === "" && !confirm("Has dejado el filtro vacío. ¡Esto afectará a TODOS los grupos!\n¿Estás seguro?")) return;
 
-        const processTxt = (v) => (v && tipo === 'contains') ? `%${v}%` : (v || '%');
+        let esBusquedaPorId = campoSQL.includes('idGrupo');
+        if (esBusquedaPorId) tipo = 'exact';
+
+        const processTxt = (v) => (v && tipo === 'contains' && !esBusquedaPorId) ? `%${v}%` : (v || '%');
         let b1 = sqlEscape(processTxt(busq1));
         let b2 = (tipo === 'exact') ? '%' : sqlEscape(processTxt(busq2));
         let strTiendas = listaTiendas.join(',');
 
-        let sqlBackup = `SELECT D.* FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \nAND MA.situacion = 'B';`;
+        let compareOp = (tipo === 'exact' || esBusquedaPorId) ? '=' : 'LIKE';
 
-        const sqlDelete = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \nAND MA.situacion = 'B';`;
+        let sqlBackup = `SELECT D.* FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''} \nAND MA.situacion = 'B';`;
 
-        const sqlUpdate = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendas}) \n        AND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \n        AND MA.situacion <> 'B' \n        ORDER BY \n            D.idRestaurante, D.idEmpresa, D.idGrupo, \n            COALESCE(D.orden, 999999) ASC, \n            D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden;`;
+        const sqlDelete = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''} \nAND MA.situacion = 'B';`;
 
-        const sqlCheck = `SELECT R.nombre as Tienda, G.nombre as Grupo, G.idGrupo, D.idArticulo, D.orden, MA.situacion \nFROM maeres R \nJOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa \nJOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nJOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} LIKE '${b1}' ${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \nORDER BY R.codigo, G.nombre, D.orden;`;
+        const sqlUpdate = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendas}) \n        AND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''} \n        AND MA.situacion <> 'B' \n        ORDER BY \n            D.idRestaurante, D.idEmpresa, D.idGrupo, \n            COALESCE(D.orden, 999999) ASC, \n            D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden;`;
+
+        const sqlCheck = `SELECT R.nombre as Tienda, G.nombre as Grupo, G.idGrupo, D.idArticulo, D.orden, MA.situacion \nFROM maeres R \nJOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa \nJOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nJOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''} \nORDER BY R.codigo, G.nombre, D.orden;`;
+
 
         let fullScript = wrapTransaction(sqlBackup + "\n\n" + sqlDelete + "\n\n" + sqlUpdate, 'safeModeRepair');
 
