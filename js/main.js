@@ -1009,13 +1009,13 @@ document.addEventListener('keyup', (e) => {
 
         if (e.target.id === 'filter-add') filtrarTiendas('list-add', 'filter-add');
         if (e.target.id === 'filter-del') filtrarTiendas('list-del', 'filter-del');
+        if (e.target.id === 'filter-api') filtrarTiendas('list-api', 'filter-api'); 
 
         if (e.target.id === 'search-excel-p_add') buscarExcel('p_add', e.target.value);
         if (e.target.id === 'search-excel-p_del') buscarExcel('p_del', e.target.value);
         if (e.target.id === 'search-excel-p_upd') buscarExcel('p_upd', e.target.value);
     }, 250);
 });
-
 document.addEventListener('focusout', (e) => {
     if (e.target.id === 'articulos') limpiarInputArticulos('articulos');
     if (e.target.id === 'articulos_borrar') limpiarInputArticulos('articulos_borrar');
