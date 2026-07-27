@@ -396,3 +396,17 @@ body.dark label:has(input[name="posicion_insercion"]):hover {
 #list-api .store-item input:checked {
     accent-color: #20c997;
 }
+
+/* ==========================================================================
+   CORRECCIÓN DE SUPERPOSICIÓN DE MODALES (Z-INDEX)
+   ========================================================================== */
+
+/* Asegura que los pop-ups de utilidad siempre se abran por encima de los modales grandes */
+#pasteModal {
+    z-index: 2050 !important; 
+}
+
+#groupsModal,
+#conflictModal {
+    z-index: 2040 !important;
+}
