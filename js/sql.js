@@ -137,7 +137,7 @@ export function generarSQLMasivo() {
         let b1 = isExcel ? '%' : sqlEscape(processTxt(busq1));
         let b2 = isExcel ? '%' : ((tipo === 'exact') ? '%' : sqlEscape(processTxt(busq2)));
         let strTiendas = listaTiendas.join(',');
-        
+
         let compareOp = (tipo === 'exact' || esBusquedaPorId) ? '=' : 'LIKE';
 
         let unionAll = ""; let unionSimple = ""; let unionGroups = "";
@@ -599,11 +599,11 @@ export function generarSQLReparar() {
 
         let compareOp = (tipo === 'exact' || esBusquedaPorId) ? '=' : 'LIKE';
 
-        let sqlBackup = `SELECT D.* FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''} \nAND MA.situacion = 'B';`;
+        let sqlBackup = `SELECT D.* FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND${campoSQL} LIKE '${b1}'${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \nAND MA.situacion = 'B'; --`;
 
-        const sqlDelete = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''} \nAND MA.situacion = 'B';`;
+        const sqlDelete = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND${campoSQL} LIKE '${b1}'${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \nAND MA.situacion = 'B'; --`;
 
-        const sqlUpdate = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendas}) \n        AND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''} \n        AND MA.situacion <> 'B' \n        ORDER BY \n            D.idRestaurante, D.idEmpresa, D.idGrupo, \n            COALESCE(D.orden, 999999) ASC, \n            D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden;`;
+        const sqlUpdate = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendas}) \n        AND${campoSQL} LIKE '${b1}'${b2 !== '%' ? `AND ${campoSQL} LIKE '${b2}'` : ''} \n        AND MA.situacion <> 'B' \n        ORDER BY \n            D.idRestaurante, D.idEmpresa, D.idGrupo, \n            COALESCE(D.orden, 999999) ASC, \n            D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden; --`;
 
         const sqlCheck = `SELECT R.nombre as Tienda, G.nombre as Grupo, G.idGrupo, D.idArticulo, D.orden, MA.situacion \nFROM maeres R \nJOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa \nJOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nJOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''} \nORDER BY R.codigo, G.nombre, D.orden;`;
 
@@ -1158,5 +1158,82 @@ export function generarGruposTPV() {
         console.error("Ejecución SQL detenida por seguridad:", error);
         showNotification("⚠️ Error al generar SQL. Revisa la consola.");
     }
+}
+export function generarApiExcel() {
+    let textArticulos = document.getElementById('api_articulos').value;
+    let listaArticulos = textArticulos.split(/[\r\n,]+/).map(s => s.trim()).filter(s => s !== '');
+    
+    if (listaArticulos.length === 0) { 
+        showNotification("⚠️ Introduce al menos un artículo."); 
+        return; 
+    }
 
+    const checkedBoxes = document.querySelectorAll('#list-api .store-item input:checked');
+    let listaTiendas = Array.from(checkedBoxes).map(cb => cb.value);
+    
+    if (listaTiendas.length === 0) { 
+        showNotification("⚠️ Selecciona al menos una tienda."); 
+        return; 
+    }
+
+    let excelData = [];
+    
+    // 1. Cabeceras estrictas del Excel API
+    excelData.push(["Result Message", "Company", "Warehouse", "Item number", "Copy Warehouse", "Copy Item Number"]);
+    excelData.push(["no", "yes", "yes", "yes", "yes", "yes"]);
+
+    // 2. Procesamiento de Artículos y Tiendas
+    listaArticulos.forEach(articulo => {
+        listaTiendas.forEach(idDb => {
+            const storeObj = state.tiendasData.find(t => t.id === idDb);
+            let visualId = storeObj ? storeObj.name.split(' - ')[0].trim() : idDb;
+            let whlo = "";
+            let numVisual = parseInt(visualId, 10);
+
+            // Reglas de nomenclatura exigidas
+            if (isNaN(numVisual)) {
+                whlo = visualId;
+            } else if (numVisual === 0) {
+                whlo = "003";
+            } else if (numVisual > 0 && numVisual <= 99) {
+                whlo = numVisual.toString().padStart(3, '0');
+            } else if (numVisual >= 100 && numVisual <= 999) {
+                whlo = numVisual.toString();
+            } else if (numVisual >= 1000 && numVisual <= 1999) {
+                whlo = "A" + numVisual.toString().slice(-2);
+            } else if (numVisual >= 3000 && numVisual <= 3999) {
+                whlo = "E" + numVisual.toString().slice(-2);
+            } else if (numVisual >= 4000 && numVisual <= 4999) {
+                whlo = "K" + numVisual.toString().slice(-2);
+            } else {
+                whlo = visualId;
+            }
+
+            // Insertar fila: (Vacio), 100, TiendaFormat, Articulo, 001, Articulo
+            excelData.push(["", "100", whlo, articulo, "001", articulo]);
+        });
+    });
+
+    // 3. Generar y Descargar Archivo Excel usando Sheet.js
+    if (typeof window.XLSX !== 'undefined') {
+        const ws = XLSX.utils.aoa_to_sheet(excelData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "API_MMS200MI_CpyItmWhs");
+        
+        let filename = `API_CpyItmWhs_${new Date().toISOString().slice(0,10)}.xlsx`;
+        XLSX.writeFile(wb, filename);
+        showNotification("✅ Excel de API generado con éxito.");
+    } else {
+        // Fallback en caso de que la librería XLSX no cargue
+        let csvContent = excelData.map(e => e.join("\t")).join("\n");
+        const blob = new Blob([csvContent], { type: 'text/plain;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `API_CpyItmWhs_${new Date().toISOString().slice(0,10)}.txt`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showNotification("✅ Archivo TXT generado (Falta librería XLSX).");
+    }
 }

@@ -756,6 +756,7 @@ function repintarTodasLasListasDeTiendas() {
     UI.crearListaTiendas('list-delete', 'store-count-delete', triggerChange);
     UI.crearListaTiendas('list-swap', 'store-count-swap', triggerChange);
     UI.crearListaTiendas('list-repair', 'store-count-repair', triggerChange);
+    UI.crearListaTiendas('list-api', 'store-count-api', triggerChange);
     UI.crearListaTiendas('list-add', 'store-count-add', triggerChange);
     UI.crearListaTiendas('list-del', 'store-count-del', triggerChange);
     UI.crearListaTiendas('list-grupos', 'store-count-grupos', triggerChange);
@@ -778,6 +779,7 @@ document.addEventListener('DOMContentLoaded', () => {
     UI.crearListaTiendas('list-delete', 'store-count-delete', triggerChange);
     UI.crearListaTiendas('list-swap', 'store-count-swap', triggerChange);
     UI.crearListaTiendas('list-repair', 'store-count-repair', triggerChange);
+    UI.crearListaTiendas('list-api', 'store-count-api', triggerChange);
     UI.crearListaTiendas('list-grupos', 'store-count-grupos', triggerChange)
 
     // Plantillas (Add y Delete manual)
@@ -883,6 +885,8 @@ document.addEventListener('click', (e) => {
         case 'toggleAllAccordions': UI.toggleAllAccordions(btn); break;
         case 'addSwapRow': addSwapRow(); break;
         case 'removeSwapRow': btn.closest('tr').remove(); guardarEstadoGlobal(); actualizarBadgeSwap(); break;
+        case 'abrirApiExcel': document.getElementById('apiExcelModal').style.display = 'flex'; break;
+        case 'generarApiExcel': ejecutarGeneracionAsincrona(btn, () => SQL.generarApiExcel()); break;
 
         // --- GENERADORES ASÍNCRONOS ---
         case 'generarSQLMasivo': ejecutarGeneracionAsincrona(btn, () => SQL.generarSQLMasivo()); break;
