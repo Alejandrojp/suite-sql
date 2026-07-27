@@ -1239,9 +1239,21 @@ export function generarApiExcel() {
         const ws2 = XLSX.utils.aoa_to_sheet(excelData);
         XLSX.utils.book_append_sheet(wb, ws2, "API_MMS200MI_CpyItmWhs");
 
-        // Extracción y saneamiento de fecha y hora para evitar errores de sistema de archivos
-        const now = new Date().toISOString();
-        const dateAndTime = now.slice(0, 19).replace('T', '_').replace(/:/g, '-');
+        // Obtenemos la hora exacta de Madrid
+        const options = {
+            timeZone: 'Europe/Madrid',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        };
+
+        const madridTimeStr = new Date().toLocaleString('sv-SE', options);
+
+        const dateAndTime = madridTimeStr.replace(' ', '_').replace(/:/g, '-');
 
         let filename = `API_CpyItmWhs_${dateAndTime}.xlsx`;
 
