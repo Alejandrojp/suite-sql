@@ -1162,6 +1162,7 @@ export function generarGruposTPV() {
         showNotification("⚠️ Error al generar SQL. Revisa la consola.");
     }
 }
+
 export function generarApiExcel() {
     let textArticulos = document.getElementById('api_articulos').value;
     let listaArticulos = textArticulos.split(/[\r\n,]+/).map(s => s.trim()).filter(s => s !== '');
@@ -1179,13 +1180,22 @@ export function generarApiExcel() {
         return;
     }
 
-    let excelData = [];
+    // --- CLONAMOS LA PESTAÑA 1: "API and Transaction" ---
+    // Esta pestaña es obligatoria para que el sistema reconozca qué API se va a usar
+    let sheet1Data = [
+        ["Worksheet", "Description", "Data"],
+        ["API_MMS200MI_CpyItmWhs", "CpyItmWhs", "x"]
+    ];
 
-    // 1. Cabeceras estrictas del Excel API
+    // --- CLONAMOS LA PESTAÑA 2: "API_MMS200MI_CpyItmWhs" ---
+    let excelData = [];
+    
+    // Exactamente las 3 filas de cabecera que exige el archivo original
+    excelData.push(["MESSAGE", "CONO", "WHLO", "ITNO", "CWHL", "CITN"]);
     excelData.push(["Result Message", "Company", "Warehouse", "Item number", "Copy Warehouse", "Copy Item Number"]);
     excelData.push(["no", "yes", "yes", "yes", "yes", "yes"]);
 
-    // 2. Procesamiento de Artículos y Tiendas
+    // Procesamiento de Artículos y Tiendas
     listaArticulos.forEach(articulo => {
         listaTiendas.forEach(idDb => {
             const storeObj = state.tiendasData.find(t => t.id === idDb);
@@ -1193,7 +1203,7 @@ export function generarApiExcel() {
             let whlo = "";
             let numVisual = parseInt(visualId, 10);
 
-            // Reglas de nomenclatura exigidas
+            // Reglas de nomenclatura exigidas para la tienda (WHLO)
             if (isNaN(numVisual)) {
                 whlo = visualId;
             } else if (numVisual === 0) {
@@ -1212,22 +1222,28 @@ export function generarApiExcel() {
                 whlo = visualId;
             }
 
-            // Insertar fila: (Vacio), 100, TiendaFormat, Articulo, 001, Articulo
+            // Insertar la fila de datos exactamente en las columnas esperadas
             excelData.push(["", "100", whlo, articulo, "001", articulo]);
         });
     });
 
-    // 3. Generar y Descargar Archivo Excel usando Sheet.js
+    // 3. Generar el Excel Exacto con las dos hojas
     if (typeof window.XLSX !== 'undefined') {
-        const ws = XLSX.utils.aoa_to_sheet(excelData);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "API_MMS200MI_CpyItmWhs");
+
+        // Creamos y adjuntamos la Hoja 1
+        const ws1 = XLSX.utils.aoa_to_sheet(sheet1Data);
+        XLSX.utils.book_append_sheet(wb, ws1, "API and Transaction");
+
+        // Creamos y adjuntamos la Hoja 2 (Datos)
+        const ws2 = XLSX.utils.aoa_to_sheet(excelData);
+        XLSX.utils.book_append_sheet(wb, ws2, "API_MMS200MI_CpyItmWhs");
 
         let filename = `API_CpyItmWhs_${new Date().toISOString().slice(0, 10)}.xlsx`;
         XLSX.writeFile(wb, filename);
-        showNotification("✅ Excel de API generado con éxito.");
+        showNotification("✅ Excel de API generado con las 2 pestañas.");
     } else {
-        // Fallback en caso de que la librería XLSX no cargue
+        // Fallback en caso de no cargar librería (solo datos)
         let csvContent = excelData.map(e => e.join("\t")).join("\n");
         const blob = new Blob([csvContent], { type: 'text/plain;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
