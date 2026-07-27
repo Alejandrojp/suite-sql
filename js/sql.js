@@ -1287,6 +1287,9 @@ export async function generarApiExcel() {
     const dateAndTime = madridTimeStr.replace(' ', '_').replace(/:/g, '-');
     const filename = `API_CpyItmWhs_${dateAndTime}.xlsx`;
 
-    XLSX.writeFile(wb, filename);
+    // bookSST: true -> obliga a usar sharedStrings.xml + t="s" (como la
+    // plantilla original), en vez del t="str" que usa SheetJS por defecto
+    // y que el importador de M3 no reconoce como texto válido.
+    XLSX.writeFile(wb, filename, { bookSST: true });
     showNotification("✅ Excel de API generado a partir de la plantilla validada por M3.");
 }
