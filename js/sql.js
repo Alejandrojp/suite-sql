@@ -582,6 +582,8 @@ export function generarSQLSwap() {
 export function generarSQLReparar() {
     try {
         const checkedBoxes = document.querySelectorAll('#list-repair .store-item input:checked');
+        let listaTiendas = Array.from(checkedBoxes).map(cb => safeInt(cb.value)); 
+        
         let busq1 = document.getElementById('busq1_repair').value.trim();
         let busq2 = document.getElementById('busq2_repair').value.trim();
         let tipo = document.getElementById('tipoBusqueda_repair').value;
