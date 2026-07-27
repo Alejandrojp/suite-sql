@@ -1191,7 +1191,7 @@ export async function generarApiExcel() {
     // ==========================================
     // Ajusta esta ruta a donde la subas en tu repo/app
     // (p.ej. /assets/templates/API_MMS200MI_CpyItmWhs.xlsx)
-    const TEMPLATE_PATH = '/templates/API_MMS200MI_CpyItmWhs.xlsx';
+    const TEMPLATE_PATH = 'templates/API_MMS200MI_CpyItmWhs.xlsx';
     const SHEET_NAME = 'API_MMS200MI_CpyItmWhs'; // debe coincidir EXACTO con la pestaña de la plantilla
 
     let wb;
