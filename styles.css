@@ -344,3 +344,55 @@ label:has(input[name="posicion_insercion"]):hover {
 body.dark label:has(input[name="posicion_insercion"]):hover {
     background-color: rgba(255,255,255,0.05);
 }
+
+/* ==========================================================================
+   ESTILOS ESPECÍFICOS PARA EL MODAL API MMS200
+   ========================================================================== */
+
+/* Ajustes para el textarea del modal de API */
+#api_articulos {
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    background-color: var(--card);
+    color: var(--text);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#api_articulos:focus {
+    outline: none;
+    border-color: #20c997;
+    box-shadow: 0 0 0 3px rgba(32, 201, 151, 0.2);
+}
+
+/* Modificador del layout del modal para pantallas pequeñas */
+@media (max-width: 768px) {
+    #apiExcelModal .modal-content > div[style*="display: flex"] {
+        flex-direction: column;
+    }
+    
+    #apiExcelModal textarea#api_articulos {
+        height: 150px !important;
+    }
+}
+
+/* Estilo para el botón turquesa (si decides usar una clase propia) */
+.btn-api {
+    background-color: #20c997;
+    border-color: #20c997;
+    color: white;
+}
+
+.btn-api:hover {
+    background-color: #17a589;
+    border-color: #17a589;
+}
+
+/* Ajuste sutil para que el badge del contador de la API use el color turquesa activo */
+#apiExcelModal .count-badge.active {
+    background-color: #20c997;
+}
+
+/* Asegurar que las checkboxes de la lista API usen el color correcto */
+#list-api .store-item input:checked {
+    accent-color: #20c997;
+}
