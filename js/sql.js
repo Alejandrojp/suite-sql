@@ -1189,7 +1189,7 @@ export function generarApiExcel() {
 
     // --- CLONAMOS LA PESTAÑA 2: "API_MMS200MI_CpyItmWhs" ---
     let excelData = [];
-    
+
     // Exactamente las 3 filas de cabecera que exige el archivo original
     excelData.push(["MESSAGE", "CONO", "WHLO", "ITNO", "CWHL", "CITN"]);
     excelData.push(["Result Message", "Company", "Warehouse", "Item number", "Copy Warehouse", "Copy Item Number"]);
@@ -1239,7 +1239,12 @@ export function generarApiExcel() {
         const ws2 = XLSX.utils.aoa_to_sheet(excelData);
         XLSX.utils.book_append_sheet(wb, ws2, "API_MMS200MI_CpyItmWhs");
 
-        let filename = `API_CpyItmWhs_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        // Extracción y saneamiento de fecha y hora para evitar errores de sistema de archivos
+        const now = new Date().toISOString();
+        const dateAndTime = now.slice(0, 19).replace('T', '_').replace(/:/g, '-');
+
+        let filename = `API_CpyItmWhs_${dateAndTime}.xlsx`;
+
         XLSX.writeFile(wb, filename);
         showNotification("✅ Excel de API generado con las 2 pestañas.");
     } else {
