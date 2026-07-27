@@ -1180,17 +1180,14 @@ export function generarApiExcel() {
         return;
     }
 
-    // --- CLONAMOS LA PESTAÑA 1: "API and Transaction" ---
-    // Esta pestaña es obligatoria para que el sistema reconozca qué API se va a usar
+    // --- 1. DATOS HOJA 1: "API and Transaction" ---
     let sheet1Data = [
         ["Worksheet", "Description", "Data"],
         ["API_MMS200MI_CpyItmWhs", "CpyItmWhs", "x"]
     ];
 
-    // --- CLONAMOS LA PESTAÑA 2: "API_MMS200MI_CpyItmWhs" ---
+    // --- 2. DATOS HOJA 2: "API_MMS200MI_CpyItmWhs" ---
     let excelData = [];
-
-    // Exactamente las 3 filas de cabecera que exige el archivo original
     excelData.push(["MESSAGE", "CONO", "WHLO", "ITNO", "CWHL", "CITN"]);
     excelData.push(["Result Message", "Company", "Warehouse", "Item number", "Copy Warehouse", "Copy Item Number"]);
     excelData.push(["no", "yes", "yes", "yes", "yes", "yes"]);
@@ -1222,24 +1219,59 @@ export function generarApiExcel() {
                 whlo = visualId;
             }
 
-            // Insertar la fila de datos exactamente en las columnas esperadas
+            // Inserción de filas de datos
             excelData.push(["", "100", whlo, articulo, "001", articulo]);
         });
     });
 
-    // 3. Generar el Excel Exacto con las dos hojas
+    // --- 3. GENERACIÓN DEL EXCEL CON ESTILOS ---
     if (typeof window.XLSX !== 'undefined') {
         const wb = XLSX.utils.book_new();
 
-        // Creamos y adjuntamos la Hoja 1
+        // ==========================================
+        // CONFIGURACIÓN HOJA 1
+        // ==========================================
         const ws1 = XLSX.utils.aoa_to_sheet(sheet1Data);
+
+        // Estilo de Cabecera: Fondo azul, texto blanco y en negrita
+        const headerStyleBlue = {
+            font: { bold: true, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: "5B9BD5" } }
+        };
+
+        if (ws1['A1']) ws1['A1'].s = headerStyleBlue;
+        if (ws1['B1']) ws1['B1'].s = headerStyleBlue;
+        if (ws1['C1']) ws1['C1'].s = headerStyleBlue;
+
+        // Anchos de columna Hoja 1
+        ws1['!cols'] = [
+            { wch: 30 }, // A: Worksheet
+            { wch: 20 }, // B: Description
+            { wch: 10 }  // C: Data
+        ];
+
         XLSX.utils.book_append_sheet(wb, ws1, "API and Transaction");
 
-        // Creamos y adjuntamos la Hoja 2 (Datos)
+        // ==========================================
+        // CONFIGURACIÓN HOJA 2
+        // ==========================================
         const ws2 = XLSX.utils.aoa_to_sheet(excelData);
+
+        // Anchos de columna Hoja 2 para evitar superposición de texto
+        ws2['!cols'] = [
+            { wch: 16 }, // A: MESSAGE
+            { wch: 12 }, // B: CONO
+            { wch: 15 }, // C: WHLO
+            { wch: 15 }, // D: ITNO
+            { wch: 18 }, // E: CWHL
+            { wch: 20 }  // F: CITN
+        ];
+
         XLSX.utils.book_append_sheet(wb, ws2, "API_MMS200MI_CpyItmWhs");
 
-        // Obtenemos la hora exacta de Madrid
+        // ==========================================
+        // CÁLCULO DE HORA Y GUARDADO
+        // ==========================================
         const options = {
             timeZone: 'Europe/Madrid',
             year: 'numeric',
@@ -1251,22 +1283,26 @@ export function generarApiExcel() {
             hour12: false
         };
 
+        // Formateo seguro para nombre de archivo (YYYY-MM-DD_HH-mm-ss)
         const madridTimeStr = new Date().toLocaleString('sv-SE', options);
-
         const dateAndTime = madridTimeStr.replace(' ', '_').replace(/:/g, '-');
-
+        
         let filename = `API_CpyItmWhs_${dateAndTime}.xlsx`;
 
         XLSX.writeFile(wb, filename);
-        showNotification("✅ Excel de API generado con las 2 pestañas.");
+        showNotification("✅ Excel de API generado con las 2 pestañas (Formato aplicado).");
     } else {
-        // Fallback en caso de no cargar librería (solo datos)
+        // --- FALLBACK EN CASO DE NO CARGAR LIBRERÍA XLSX ---
         let csvContent = excelData.map(e => e.join("\t")).join("\n");
         const blob = new Blob([csvContent], { type: 'text/plain;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.setAttribute("href", url);
-        link.setAttribute("download", `API_CpyItmWhs_${new Date().toISOString().slice(0, 10)}.txt`);
+        
+        const fallBackOptions = { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const fallbackDate = new Date().toLocaleString('sv-SE', fallBackOptions);
+        
+        link.setAttribute("download", `API_CpyItmWhs_${fallbackDate}.txt`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
