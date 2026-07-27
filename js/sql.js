@@ -1163,6 +1163,22 @@ export function generarGruposTPV() {
     }
 }
 
+// WHLO de las tiendas de Canarias (IGIC en vez de IVA)
+const TIENDAS_CANARIAS = ['A18', 'A32', 'A39', 'A51'];
+
+// Regla de nomenclatura del WHLO a partir del ID visual de la tienda
+function calcularWhlo(visualId) {
+    let numVisual = parseInt(visualId, 10);
+    if (isNaN(numVisual)) return visualId;
+    if (numVisual === 0) return "003";
+    if (numVisual > 0 && numVisual <= 99) return numVisual.toString().padStart(3, '0');
+    if (numVisual >= 100 && numVisual <= 999) return numVisual.toString();
+    if (numVisual >= 1000 && numVisual <= 1999) return "A" + numVisual.toString().slice(-2);
+    if (numVisual >= 3000 && numVisual <= 3999) return "E" + numVisual.toString().slice(-2);
+    if (numVisual >= 4000 && numVisual <= 4999) return "K" + numVisual.toString().slice(-2);
+    return visualId;
+}
+
 // IMPORTANTE: ahora es async porque necesitamos hacer fetch() de la plantilla
 export async function generarApiExcel() {
     let textArticulos = document.getElementById('api_articulos').value;
@@ -1184,6 +1200,31 @@ export async function generarApiExcel() {
     if (typeof window.XLSX === 'undefined') {
         showNotification("⚠️ Falta la librería XLSX.");
         return;
+    }
+
+    // ==========================================
+    // 0. AVISO IVA CANARIAS (bloqueante, con nombre de cada tienda)
+    // ==========================================
+    const tiendasCanariasDetectadas = listaTiendas
+        .map(idDb => {
+            const storeObj = state.tiendasData.find(t => t.id === idDb);
+            const visualId = storeObj ? storeObj.name.split(' - ')[0].trim() : idDb;
+            const nombreCompleto = storeObj ? storeObj.name : idDb;
+            return { nombreCompleto, whlo: calcularWhlo(visualId) };
+        })
+        .filter(t => TIENDAS_CANARIAS.includes(t.whlo));
+
+    if (tiendasCanariasDetectadas.length > 0) {
+        const listado = tiendasCanariasDetectadas
+            .map(t => `- ${t.nombreCompleto} (${t.whlo})`)
+            .join('\n');
+        const continuar = window.confirm(
+            `⚠️ Revisar IVA (IGIC)\n\nHas incluido ${tiendasCanariasDetectadas.length === 1 ? 'la siguiente tienda de Canarias' : 'las siguientes tiendas de Canarias'}:\n\n${listado}\n\n¿Confirmas que has revisado el IVA y quieres continuar?`
+        );
+        if (!continuar) {
+            showNotification("❌ Generación cancelada.");
+            return;
+        }
     }
 
     // ==========================================
@@ -1221,27 +1262,8 @@ export async function generarApiExcel() {
     listaArticulos.forEach(articulo => {
         listaTiendas.forEach(idDb => {
             const storeObj = state.tiendasData.find(t => t.id === idDb);
-            let visualId = storeObj ? storeObj.name.split(' - ')[0].trim() : idDb;
-            let whlo = "";
-            let numVisual = parseInt(visualId, 10);
-
-            if (isNaN(numVisual)) {
-                whlo = visualId;
-            } else if (numVisual === 0) {
-                whlo = "003";
-            } else if (numVisual > 0 && numVisual <= 99) {
-                whlo = numVisual.toString().padStart(3, '0');
-            } else if (numVisual >= 100 && numVisual <= 999) {
-                whlo = numVisual.toString();
-            } else if (numVisual >= 1000 && numVisual <= 1999) {
-                whlo = "A" + numVisual.toString().slice(-2);
-            } else if (numVisual >= 3000 && numVisual <= 3999) {
-                whlo = "E" + numVisual.toString().slice(-2);
-            } else if (numVisual >= 4000 && numVisual <= 4999) {
-                whlo = "K" + numVisual.toString().slice(-2);
-            } else {
-                whlo = visualId;
-            }
+            const visualId = storeObj ? storeObj.name.split(' - ')[0].trim() : idDb;
+            const whlo = calcularWhlo(visualId);
 
             // TODOS los campos como texto explícito (incluido CONO), igual
             // que en la plantilla original: M3 espera estos campos como
@@ -1293,3 +1315,5 @@ export async function generarApiExcel() {
     XLSX.writeFile(wb, filename, { bookSST: true });
     showNotification("✅ Excel de API generado a partir de la plantilla validada por M3.");
 }
+
+
