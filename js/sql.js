@@ -1163,7 +1163,8 @@ export function generarGruposTPV() {
     }
 }
 
-export function generarApiExcel() {
+// IMPORTANTE: ahora es async porque necesitamos hacer fetch() de la plantilla
+export async function generarApiExcel() {
     let textArticulos = document.getElementById('api_articulos').value;
     let listaArticulos = textArticulos.split(/[\r\n,]+/).map(s => s.trim()).filter(s => s !== '');
 
@@ -1180,19 +1181,42 @@ export function generarApiExcel() {
         return;
     }
 
-    // --- 1. DATOS HOJA 1: "API and Transaction" ---
-    let sheet1Data = [
-        ["Worksheet", "Description", "Data"],
-        ["API_MMS200MI_CpyItmWhs", "CpyItmWhs", "x"]
-    ];
+    if (typeof window.XLSX === 'undefined') {
+        showNotification("⚠️ Falta la librería XLSX.");
+        return;
+    }
 
-    // --- 2. DATOS HOJA 2: "API_MMS200MI_CpyItmWhs" ---
-    let excelData = [];
-    excelData.push(["MESSAGE", "CONO", "WHLO", "ITNO", "CWHL", "CITN"]);
-    excelData.push(["Result Message", "Company", "Warehouse", "Item number", "Copy Warehouse", "Copy Item Number"]);
-    excelData.push(["no", "yes", "yes", "yes", "yes", "yes"]);
+    // ==========================================
+    // 1. CARGAR LA PLANTILLA REAL (la que sí acepta M3)
+    // ==========================================
+    // Ajusta esta ruta a donde la subas en tu repo/app
+    // (p.ej. /assets/templates/API_MMS200MI_CpyItmWhs.xlsx)
+    const TEMPLATE_PATH = '/templates/API_MMS200MI_CpyItmWhs.xlsx';
+    const SHEET_NAME = 'API_MMS200MI_CpyItmWhs'; // debe coincidir EXACTO con la pestaña de la plantilla
 
-    // Procesamiento de Artículos y Tiendas
+    let wb;
+    try {
+        const response = await fetch(TEMPLATE_PATH);
+        if (!response.ok) throw new Error(`No se pudo cargar la plantilla (${response.status})`);
+        const arrayBuffer = await response.arrayBuffer();
+        // cellStyles: true para conservar formato/estilos originales de la plantilla
+        wb = XLSX.read(arrayBuffer, { type: 'array', cellStyles: true });
+    } catch (err) {
+        console.error(err);
+        showNotification("❌ No se pudo cargar la plantilla base del Excel de API.");
+        return;
+    }
+
+    const ws2 = wb.Sheets[SHEET_NAME];
+    if (!ws2) {
+        showNotification(`❌ La plantilla no contiene la hoja "${SHEET_NAME}".`);
+        return;
+    }
+
+    // ==========================================
+    // 2. CALCULAR LAS FILAS DE DATOS (misma lógica de siempre)
+    // ==========================================
+    let filas = [];
     listaArticulos.forEach(articulo => {
         listaTiendas.forEach(idDb => {
             const storeObj = state.tiendasData.find(t => t.id === idDb);
@@ -1200,7 +1224,6 @@ export function generarApiExcel() {
             let whlo = "";
             let numVisual = parseInt(visualId, 10);
 
-            // Reglas de nomenclatura exigidas para la tienda (WHLO)
             if (isNaN(numVisual)) {
                 whlo = visualId;
             } else if (numVisual === 0) {
@@ -1219,93 +1242,48 @@ export function generarApiExcel() {
                 whlo = visualId;
             }
 
-            // Inserción de filas de datos
-            excelData.push(["", "100", whlo, articulo, "001", articulo]);
+            // OJO: WHLO e ITNO como texto explícito para no perder ceros
+            // a la izquierda al escribir en la plantilla
+            filas.push(["", 100, whlo, String(articulo), "001", String(articulo)]);
         });
     });
 
-    // --- 3. GENERACIÓN DEL EXCEL CON ESTILOS ---
-    if (typeof window.XLSX !== 'undefined') {
-        const wb = XLSX.utils.book_new();
+    // ==========================================
+    // 3. ESCRIBIR LOS DATOS A PARTIR DE LA FILA 4 (index 3)
+    //    sin tocar cabeceras, estilos ni metadatos de la plantilla
+    // ==========================================
+    const FILA_INICIO_DATOS = 3; // fila 4 en Excel (0-indexed)
+    XLSX.utils.sheet_add_aoa(ws2, filas, { origin: FILA_INICIO_DATOS });
 
-        // ==========================================
-        // CONFIGURACIÓN HOJA 1
-        // ==========================================
-        const ws1 = XLSX.utils.aoa_to_sheet(sheet1Data);
+    // Forzar tipo texto en WHLO e ITNO/CITN para preservar ceros/letras iniciales
+    filas.forEach((fila, i) => {
+        const row = FILA_INICIO_DATOS + i;
+        ['C', 'D', 'F'].forEach(col => {
+            const cellRef = `${col}${row + 1}`;
+            if (ws2[cellRef]) ws2[cellRef].t = 's';
+        });
+    });
 
-        // Estilo de Cabecera: Fondo azul, texto blanco y en negrita
-        const headerStyleBlue = {
-            font: { bold: true, color: { rgb: "FFFFFF" } },
-            fill: { fgColor: { rgb: "5B9BD5" } }
-        };
+    // Ampliar el rango de la hoja para que incluya las nuevas filas
+    const nuevoRango = XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: FILA_INICIO_DATOS + filas.length - 1, c: 5 }
+    });
+    ws2['!ref'] = nuevoRango;
 
-        if (ws1['A1']) ws1['A1'].s = headerStyleBlue;
-        if (ws1['B1']) ws1['B1'].s = headerStyleBlue;
-        if (ws1['C1']) ws1['C1'].s = headerStyleBlue;
+    // ==========================================
+    // 4. GUARDAR CON EL MISMO NOMBRE DE SIEMPRE
+    // ==========================================
+    const options = {
+        timeZone: 'Europe/Madrid',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+    };
+    const madridTimeStr = new Date().toLocaleString('sv-SE', options);
+    const dateAndTime = madridTimeStr.replace(' ', '_').replace(/:/g, '-');
+    const filename = `API_CpyItmWhs_${dateAndTime}.xlsx`;
 
-        // Anchos de columna Hoja 1
-        ws1['!cols'] = [
-            { wch: 30 }, // A: Worksheet
-            { wch: 20 }, // B: Description
-            { wch: 10 }  // C: Data
-        ];
-
-        XLSX.utils.book_append_sheet(wb, ws1, "API and Transaction");
-
-        // ==========================================
-        // CONFIGURACIÓN HOJA 2
-        // ==========================================
-        const ws2 = XLSX.utils.aoa_to_sheet(excelData);
-
-        // Anchos de columna Hoja 2 para evitar superposición de texto
-        ws2['!cols'] = [
-            { wch: 16 }, // A: MESSAGE
-            { wch: 12 }, // B: CONO
-            { wch: 15 }, // C: WHLO
-            { wch: 15 }, // D: ITNO
-            { wch: 18 }, // E: CWHL
-            { wch: 20 }  // F: CITN
-        ];
-
-        XLSX.utils.book_append_sheet(wb, ws2, "API_MMS200MI_CpyItmWhs");
-
-        // ==========================================
-        // CÁLCULO DE HORA Y GUARDADO
-        // ==========================================
-        const options = {
-            timeZone: 'Europe/Madrid',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        };
-
-        // Formateo seguro para nombre de archivo (YYYY-MM-DD_HH-mm-ss)
-        const madridTimeStr = new Date().toLocaleString('sv-SE', options);
-        const dateAndTime = madridTimeStr.replace(' ', '_').replace(/:/g, '-');
-        
-        let filename = `API_CpyItmWhs_${dateAndTime}.xlsx`;
-
-        XLSX.writeFile(wb, filename);
-        showNotification("✅ Excel de API generado con las 2 pestañas (Formato aplicado).");
-    } else {
-        // --- FALLBACK EN CASO DE NO CARGAR LIBRERÍA XLSX ---
-        let csvContent = excelData.map(e => e.join("\t")).join("\n");
-        const blob = new Blob([csvContent], { type: 'text/plain;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        
-        const fallBackOptions = { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' };
-        const fallbackDate = new Date().toLocaleString('sv-SE', fallBackOptions);
-        
-        link.setAttribute("download", `API_CpyItmWhs_${fallbackDate}.txt`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showNotification("✅ Archivo TXT generado (Falta librería XLSX).");
-    }
+    XLSX.writeFile(wb, filename);
+    showNotification("✅ Excel de API generado a partir de la plantilla validada por M3.");
 }
