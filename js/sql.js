@@ -1189,8 +1189,9 @@ export async function generarApiExcel() {
     // ==========================================
     // 1. CARGAR LA PLANTILLA REAL (la que sí acepta M3)
     // ==========================================
-    // Ajusta esta ruta a donde la subas en tu repo/app
-    // (p.ej. /assets/templates/API_MMS200MI_CpyItmWhs.xlsx)
+    // Ruta RELATIVA (sin "/" al principio): funciona igual en GitHub Pages,
+    // Netlify, Vercel o cualquier hosting, tomando como base la carpeta
+    // donde esté el HTML que carga este script.
     const TEMPLATE_PATH = 'templates/API_MMS200MI_CpyItmWhs.xlsx';
     const SHEET_NAME = 'API_MMS200MI_CpyItmWhs'; // debe coincidir EXACTO con la pestaña de la plantilla
 
@@ -1242,9 +1243,10 @@ export async function generarApiExcel() {
                 whlo = visualId;
             }
 
-            // OJO: WHLO e ITNO como texto explícito para no perder ceros
-            // a la izquierda al escribir en la plantilla
-            filas.push(["", 100, whlo, String(articulo), "001", String(articulo)]);
+            // TODOS los campos como texto explícito (incluido CONO), igual
+            // que en la plantilla original: M3 espera estos campos como
+            // alfanumérico, no como número.
+            filas.push(["", "100", whlo, String(articulo), "001", String(articulo)]);
         });
     });
 
@@ -1255,10 +1257,11 @@ export async function generarApiExcel() {
     const FILA_INICIO_DATOS = 3; // fila 4 en Excel (0-indexed)
     XLSX.utils.sheet_add_aoa(ws2, filas, { origin: FILA_INICIO_DATOS });
 
-    // Forzar tipo texto en WHLO e ITNO/CITN para preservar ceros/letras iniciales
+    // Forzar tipo texto en TODAS las columnas de datos (B a F), para que
+    // ningún campo (ni siquiera CONO) se guarde por error como número.
     filas.forEach((fila, i) => {
         const row = FILA_INICIO_DATOS + i;
-        ['C', 'D', 'F'].forEach(col => {
+        ['B', 'C', 'D', 'E', 'F'].forEach(col => {
             const cellRef = `${col}${row + 1}`;
             if (ws2[cellRef]) ws2[cellRef].t = 's';
         });
