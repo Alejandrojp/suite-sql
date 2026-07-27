@@ -889,6 +889,8 @@ document.addEventListener('click', (e) => {
         case 'addSwapRow': addSwapRow(); break;
         case 'removeSwapRow': btn.closest('tr').remove(); guardarEstadoGlobal(); actualizarBadgeSwap(); break;
         case 'abrirApiExcel': document.getElementById('apiExcelModal').style.display = 'flex'; break;
+        UI.crearListaTiendas('list-api', 'store-count-api', () => guardarEstadoGlobal());
+            break;
         case 'generarApiExcel': ejecutarGeneracionAsincrona(btn, () => SQL.generarApiExcel()); break;
 
         // --- GENERADORES ASÍNCRONOS ---
