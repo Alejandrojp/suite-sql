@@ -738,7 +738,11 @@ function addSwapRow(oldVal = '', newVal = '') {
 
 function actualizarBadgeSwap() {
     if (document.querySelector('input[name="modo_swap"]:checked').value === 'simple') {
-        document.getElementById('art-count-swap-badge').textContent = document.querySelectorAll('#swap-rows tr').length + ' pares';
+        const textarea = document.getElementById('articulos_swap');
+        if (textarea) {
+            const lineas = textarea.value.split(/[\r\n]+/).filter(l => l.trim() !== '');
+            document.getElementById('art-count-swap-badge').textContent = lineas.length + ' pares';
+        }
     }
 }
 
@@ -798,7 +802,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.querySelector('input[name="modo_p_del"]:checked')) toggleModoPDel();
 
     UI.actualizarContadorArticulosGenerico('articulos_borrar', 'art-count-del');
-    if (document.getElementById('swap-rows').children.length === 0) addSwapRow();
 
     window.addEventListener('scroll', UI.handleFloatingScrollButton);
     UI.handleFloatingScrollButton();
@@ -940,7 +943,7 @@ document.addEventListener('input', (e) => {
     if (id === 'paste-del') { procesarExcel('p_del'); guardarEstadoGlobal(); }
     if (id === 'paste-upd') { procesarExcel('p_upd'); guardarEstadoGlobal(); }
 
-    if (e.target.classList && e.target.classList.contains('swap-input')) { actualizarBadgeSwap(); }
+    if (id === 'articulos_swap') { actualizarBadgeSwap(); }
     if (e.target.classList && e.target.classList.contains('editor-input')) { e.target.style.borderColor = ''; e.target.style.backgroundColor = ''; }
 });
 

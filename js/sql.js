@@ -380,17 +380,20 @@ export function generarSQLSwap() {
                 if (!allNewIds.includes(sNew)) allNewIds.push(sNew);
             });
         } else {
-            const rows = document.querySelectorAll('#swap-rows tr');
-            rows.forEach(row => {
-                const inputs = row.querySelectorAll('input');
-                // Estandarización: Eliminar letras, símbolos o espacios accidentalmente tecleados
-                const oldId = inputs[0].value.trim().replace(/\D/g, '');
-                const newId = inputs[1].value.trim().replace(/\D/g, '');
-                if (oldId && newId) {
-                    let sOld = safeInt(oldId);
-                    let sNew = safeInt(newId);
-                    pairs.push({ old: sOld, new: sNew });
-                    if (!allNewIds.includes(sNew)) allNewIds.push(sNew);
+            let textSwap = document.getElementById('articulos_swap').value;
+            let lineas = textSwap.split(/[\r\n]+/).filter(l => l.trim() !== '');
+
+            lineas.forEach(line => {
+                let parts = line.split(',');
+                if (parts.length >= 2) {
+                    let oldId = parts[0].trim().replace(/\D/g, '');
+                    let newId = parts[1].trim().replace(/\D/g, '');
+                    if (oldId && newId) {
+                        let sOld = safeInt(oldId);
+                        let sNew = safeInt(newId);
+                        pairs.push({ old: sOld, new: sNew });
+                        if (!allNewIds.includes(sNew)) allNewIds.push(sNew);
+                    }
                 }
             });
         }
@@ -1162,22 +1165,22 @@ export function generarGruposTPV() {
 export function generarApiExcel() {
     let textArticulos = document.getElementById('api_articulos').value;
     let listaArticulos = textArticulos.split(/[\r\n,]+/).map(s => s.trim()).filter(s => s !== '');
-    
-    if (listaArticulos.length === 0) { 
-        showNotification("⚠️ Introduce al menos un artículo."); 
-        return; 
+
+    if (listaArticulos.length === 0) {
+        showNotification("⚠️ Introduce al menos un artículo.");
+        return;
     }
 
     const checkedBoxes = document.querySelectorAll('#list-api .store-item input:checked');
     let listaTiendas = Array.from(checkedBoxes).map(cb => cb.value);
-    
-    if (listaTiendas.length === 0) { 
-        showNotification("⚠️ Selecciona al menos una tienda."); 
-        return; 
+
+    if (listaTiendas.length === 0) {
+        showNotification("⚠️ Selecciona al menos una tienda.");
+        return;
     }
 
     let excelData = [];
-    
+
     // 1. Cabeceras estrictas del Excel API
     excelData.push(["Result Message", "Company", "Warehouse", "Item number", "Copy Warehouse", "Copy Item Number"]);
     excelData.push(["no", "yes", "yes", "yes", "yes", "yes"]);
@@ -1219,8 +1222,8 @@ export function generarApiExcel() {
         const ws = XLSX.utils.aoa_to_sheet(excelData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "API_MMS200MI_CpyItmWhs");
-        
-        let filename = `API_CpyItmWhs_${new Date().toISOString().slice(0,10)}.xlsx`;
+
+        let filename = `API_CpyItmWhs_${new Date().toISOString().slice(0, 10)}.xlsx`;
         XLSX.writeFile(wb, filename);
         showNotification("✅ Excel de API generado con éxito.");
     } else {
@@ -1230,7 +1233,7 @@ export function generarApiExcel() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.setAttribute("href", url);
-        link.setAttribute("download", `API_CpyItmWhs_${new Date().toISOString().slice(0,10)}.txt`);
+        link.setAttribute("download", `API_CpyItmWhs_${new Date().toISOString().slice(0, 10)}.txt`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
