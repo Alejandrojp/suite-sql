@@ -1772,135 +1772,138 @@
 
             </div>
 
-        </div>
-
-        <!-- PESTAÑA TRASPASO -->
-        <div id="tab-traspaso" class="tab-content theme-section-purple">
-            <div class="info-box info-purple" style="margin-bottom: 10px;">
-                <strong>🔄 MIGRACIÓN DE STOCK:</strong> Mueve artículos de una plantilla a otra (Ej: de MBCOLD SECO a
-                CAPSA) conservando el stock y borrándolos del origen.
-            </div>
-
-            <div style="display: flex; gap: 15px; margin-bottom: 15px; align-items: flex-end;">
-                <div style="flex: 1;">
-                    <label>Proveedor ORIGEN (Ej: MBCOLD SECO):</label>
-                    <div class="input-wrapper">
-                        <input type="text" id="tras-prov-origen" list="group-history"
-                            placeholder="Se buscará con LIKE %...%">
-                        <button class="clear-input-btn" data-action="clearInput"
-                            data-target="tras-prov-origen">✖</button>
-                    </div>
+            <!-- PESTAÑA TRASPASO -->
+            <div id="tab-traspaso" class="tab-content theme-section-purple">
+                <div class="info-box info-purple" style="margin-bottom: 10px;">
+                    <strong>🔄 MIGRACIÓN DE STOCK:</strong> Mueve artículos de una plantilla a otra (Ej: de MBCOLD SECO
+                    a
+                    CAPSA) conservando el stock y borrándolos del origen.
                 </div>
 
-                <button class="btn-small" data-action="swapProveedores"
-                    style="height: 43px; margin-bottom: 2px; background: #8e44ad; border-color: #8e44ad;"
-                    title="Intercambiar Origen y Destino">⇄</button>
-
-                <div style="flex: 1;">
-                    <label>Proveedor DESTINO (Ej: CAPSA):</label>
-                    <div class="input-wrapper">
-                        <input type="text" id="tras-prov-destino" list="group-history"
-                            placeholder="Se buscará con LIKE %...%">
-                        <button class="clear-input-btn" data-action="clearInput"
-                            data-target="tras-prov-destino">✖</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="input-group">
-                <label style="display:flex; justify-content:space-between; align-items:center;">
-                    Artículos a traspasar (IDs separados por intro o coma):
-                    <span id="art-count-traspaso" class="count-badge art-badge" style="background:#6c757d;">0
-                        artículos</span>
-                </label>
-                <div class="input-wrapper">
-                    <textarea id="tras-articulos" placeholder="Ej:&#10;50918&#10;50919"></textarea>
-                    <button class="clear-input-btn" data-action="clearInput" data-target="tras-articulos">✖</button>
-                </div>
-            </div>
-
-            <div class="input-group">
-                <h3 class="section-title">
-                    Seleccionar Tiendas Afectadas:
-                    <span>
-                        <span id="store-count-traspaso" class="count-badge">0 seleccionadas</span>
-                        <button class="copy-ids-btn" data-action="copiarSoloIDs" data-target="list-traspaso">Copiar
-                            IDs</button>
-                    </span>
-                </h3>
-                <div class="store-selector-container">
-                    <div class="store-tools">
-                        <div class="input-wrapper" style="max-width: 150px;">
-                            <input type="text" id="filter-traspaso" placeholder="🔍 Buscar..."
-                                style="padding: 6px; width: 100%;">
+                <div style="display: flex; gap: 15px; margin-bottom: 15px; align-items: flex-end;">
+                    <div style="flex: 1;">
+                        <label>Proveedor ORIGEN (Ej: MBCOLD SECO):</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="tras-prov-origen" list="group-history"
+                                placeholder="Se buscará con LIKE %...%">
                             <button class="clear-input-btn" data-action="clearInput"
-                                data-target="filter-traspaso">✖</button>
+                                data-target="tras-prov-origen">✖</button>
                         </div>
-                        <button class="btn-small" style="background: #6f42c1; border-color: #6f42c1;"
-                            data-action="openPasteModal" data-target="list-traspaso">📋 Pegar IDs</button>
-                        <button class="btn-small" style="background: #007bff; border-color: #007bff;"
-                            data-action="guardarGrupo" data-target="list-traspaso">+ Guardar Grupo</button>
-                        <button class="btn-small" data-action="seleccionarVisibles" data-target="list-traspaso"
-                            data-state="true">Todos</button>
-                        <button class="btn-small" data-action="seleccionarVisibles" data-target="list-traspaso"
-                            data-state="false">Ninguno</button>
                     </div>
 
-                    <!-- AÑADIDA LA BARRA DE MIS GRUPOS -->
-                    <div class="custom-groups-bar">
-                        <button class="btn-small" data-action="openGroupManager"
-                            style="background: #6c757d; border-color: #6c757d; font-size:10px;">🗑️ Gestionar Mis
-                            Grupos</button>
-                        <span style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></span>
-                        <div id="dynamic-groups-traspaso" style="display:inline-flex; gap:5px; flex-wrap:wrap;"></div>
-                    </div>
+                    <button class="btn-small" data-action="swapProveedores"
+                        style="height: 43px; margin-bottom: 2px; background: #8e44ad; border-color: #8e44ad;"
+                        title="Intercambiar Origen y Destino">⇄</button>
 
-                    <div class="store-list" id="list-traspaso"></div>
-                </div>
-            </div>
-
-            <div class="actions-row">
-                <!-- AÑADIDO EL ID btn-gen-traspaso -->
-                <button id="btn-gen-traspaso" class="btn-generate btn-gen-purple"
-                    data-action="generarTraspasoPlantillas">GENERAR TRASPASO (Ctrl+Enter)</button>
-                <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="p_traspaso">💾
-                    Descargar</button>
-                <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
-            </div>
-
-            <div id="res-traspaso" class="output-section">
-                <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3 style="margin:0; flex:1; text-align:center;">Resultados Traspaso</h3>
-                    <div style="display:flex; align-items: center; gap:10px;">
-                        <div class="safe-mode-toggle" style="background: none; border: none; padding: 0;">
-                            <input type="checkbox" id="cleanCopyTraspasoPlantillas"
-                                title="Copia solo el código SQL sin comentarios">
-                            <label for="cleanCopyTraspasoPlantillas"
-                                style="font-size: 12px; margin: 0; color: #666;">Copiar limpio</label>
+                    <div style="flex: 1;">
+                        <label>Proveedor DESTINO (Ej: CAPSA):</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="tras-prov-destino" list="group-history"
+                                placeholder="Se buscará con LIKE %...%">
+                            <button class="clear-input-btn" data-action="clearInput"
+                                data-target="tras-prov-destino">✖</button>
                         </div>
-                        <button class="btn-small" data-action="toggleAllAccordions" data-expanded="false"
-                            style="background:#17a2b8; border-color:#17a2b8;">📂 Abrir todos</button>
-                        <button class="btn-small" data-action="hideElement" data-target="res-traspaso"
-                            style="background:#dc3545;">🗑️ Limpiar</button>
                     </div>
                 </div>
-                <div class="accordion-item">
-                    <div class="accordion-header" style="border-left-color: var(--theme-purple);">1. SCRIPT DE TRASPASO
-                        (Insert + Update + Delete)</div>
-                    <div class="accordion-content show">
-                        <div class="action-bar"><button class="copy-btn"
-                                onclick="window.copyTextPlantillas('out-traspaso', this, 'cleanCopyTraspasoPlantillas')">📋
-                                Copiar</button></div>
-                        <pre class="query-box"><code class="language-sql" id="out-traspaso"></code></pre>
+
+                <div class="input-group">
+                    <label style="display:flex; justify-content:space-between; align-items:center;">
+                        Artículos a traspasar (IDs separados por intro o coma):
+                        <span id="art-count-traspaso" class="count-badge art-badge" style="background:#6c757d;">0
+                            artículos</span>
+                    </label>
+                    <div class="input-wrapper">
+                        <textarea id="tras-articulos" placeholder="Ej:&#10;50918&#10;50919"></textarea>
+                        <button class="clear-input-btn" data-action="clearInput" data-target="tras-articulos">✖</button>
                     </div>
                 </div>
-                <div class="accordion-item">
-                    <div class="accordion-header fix">2. 🔎 COMPROBACIÓN RESULTANTE</div>
-                    <div class="accordion-content">
-                        <div class="action-bar"><button class="copy-btn"
-                                onclick="window.copyTextPlantillas('out-traspaso-audit', this, 'cleanCopyTraspasoPlantillas')">📋
-                                Copiar</button></div>
-                        <pre class="query-box"><code class="language-sql" id="out-traspaso-audit"></code></pre>
+
+                <div class="input-group">
+                    <h3 class="section-title">
+                        Seleccionar Tiendas Afectadas:
+                        <span>
+                            <span id="store-count-traspaso" class="count-badge">0 seleccionadas</span>
+                            <button class="copy-ids-btn" data-action="copiarSoloIDs" data-target="list-traspaso">Copiar
+                                IDs</button>
+                        </span>
+                    </h3>
+                    <div class="store-selector-container">
+                        <div class="store-tools">
+                            <div class="input-wrapper" style="max-width: 150px;">
+                                <input type="text" id="filter-traspaso" placeholder="🔍 Buscar..."
+                                    style="padding: 6px; width: 100%;">
+                                <button class="clear-input-btn" data-action="clearInput"
+                                    data-target="filter-traspaso">✖</button>
+                            </div>
+                            <button class="btn-small" style="background: #6f42c1; border-color: #6f42c1;"
+                                data-action="openPasteModal" data-target="list-traspaso">📋 Pegar IDs</button>
+                            <button class="btn-small" style="background: #007bff; border-color: #007bff;"
+                                data-action="guardarGrupo" data-target="list-traspaso">+ Guardar Grupo</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-traspaso"
+                                data-state="true">Todos</button>
+                            <button class="btn-small" data-action="seleccionarVisibles" data-target="list-traspaso"
+                                data-state="false">Ninguno</button>
+                        </div>
+
+                        <!-- AÑADIDA LA BARRA DE MIS GRUPOS -->
+                        <div class="custom-groups-bar">
+                            <button class="btn-small" data-action="openGroupManager"
+                                style="background: #6c757d; border-color: #6c757d; font-size:10px;">🗑️ Gestionar Mis
+                                Grupos</button>
+                            <span style="border-left:1px solid #ccc; margin:0 5px; height:20px;"></span>
+                            <div id="dynamic-groups-traspaso" style="display:inline-flex; gap:5px; flex-wrap:wrap;">
+                            </div>
+                        </div>
+
+                        <div class="store-list" id="list-traspaso"></div>
+                    </div>
+                </div>
+
+                <div class="actions-row">
+                    <!-- AÑADIDO EL ID btn-gen-traspaso -->
+                    <button id="btn-gen-traspaso" class="btn-generate btn-gen-purple"
+                        data-action="generarTraspasoPlantillas">GENERAR TRASPASO (Ctrl+Enter)</button>
+                    <button class="btn-secondary btn-download" data-action="descargarSQL" data-tab="p_traspaso">💾
+                        Descargar</button>
+                    <button class="btn-secondary" data-action="copiarMasivo">📋 Copiar Todo</button>
+                </div>
+
+                <div id="res-traspaso" class="output-section">
+                    <div
+                        style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin:0; flex:1; text-align:center;">Resultados Traspaso</h3>
+                        <div style="display:flex; align-items: center; gap:10px;">
+                            <div class="safe-mode-toggle" style="background: none; border: none; padding: 0;">
+                                <input type="checkbox" id="cleanCopyTraspasoPlantillas"
+                                    title="Copia solo el código SQL sin comentarios">
+                                <label for="cleanCopyTraspasoPlantillas"
+                                    style="font-size: 12px; margin: 0; color: #666;">Copiar limpio</label>
+                            </div>
+                            <button class="btn-small" data-action="toggleAllAccordions" data-expanded="false"
+                                style="background:#17a2b8; border-color:#17a2b8;">📂 Abrir todos</button>
+                            <button class="btn-small" data-action="hideElement" data-target="res-traspaso"
+                                style="background:#dc3545;">🗑️ Limpiar</button>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <div class="accordion-header" style="border-left-color: var(--theme-purple);">1. SCRIPT DE
+                            TRASPASO
+                            (Insert + Update + Delete)</div>
+                        <div class="accordion-content show">
+                            <div class="action-bar"><button class="copy-btn"
+                                    onclick="window.copyTextPlantillas('out-traspaso', this, 'cleanCopyTraspasoPlantillas')">📋
+                                    Copiar</button></div>
+                            <pre class="query-box"><code class="language-sql" id="out-traspaso"></code></pre>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <div class="accordion-header fix">2. 🔎 COMPROBACIÓN RESULTANTE</div>
+                        <div class="accordion-content">
+                            <div class="action-bar"><button class="copy-btn"
+                                    onclick="window.copyTextPlantillas('out-traspaso-audit', this, 'cleanCopyTraspasoPlantillas')">📋
+                                    Copiar</button></div>
+                            <pre class="query-box"><code class="language-sql" id="out-traspaso-audit"></code></pre>
+                        </div>
                     </div>
                 </div>
             </div>
