@@ -118,7 +118,11 @@ function buildStateObj() {
         tpv_desc: document.getElementById('tpv-desc')?.value || '',
         tpv_padre: document.getElementById('tpv-padre')?.value || '0',
         tpv_macro_enlace: document.getElementById('tpv-macro-enlace')?.value || '',
-        filter_grupos: document.getElementById('filter-grupos')?.value || ''
+        filter_grupos: document.getElementById('filter-grupos')?.value || '',
+        trasProvOrigen: document.getElementById('tras-prov-origen')?.value || '',
+        trasProvDestino: document.getElementById('tras-prov-destino')?.value || '',
+        trasArticulos: document.getElementById('tras-articulos')?.value || '',
+        filterTraspaso: document.getElementById('filter-traspaso')?.value || ''
     };
 }
 
@@ -168,6 +172,11 @@ function cargarEstadoFormulario() {
     setVal('tpv-id', s.tpv_id); setVal('tpv-nombre', s.tpv_nombre); setVal('tpv-desc', s.tpv_desc);
     setVal('tpv-padre', s.tpv_padre); setVal('tpv-macro-enlace', s.tpv_macro_enlace);
     setVal('filter-grupos', s.filter_grupos); if (s.filter_grupos) filtrarTiendas('list-grupos', 'filter-grupos');
+    setVal('tras-prov-origen', s.trasProvOrigen);
+    setVal('tras-prov-destino', s.trasProvDestino);
+    setVal('tras-articulos', s.trasArticulos);
+    setVal('filter-traspaso', s.filterTraspaso);
+    if (s.filterTraspaso) filtrarTiendas('list-traspaso', 'filter-traspaso');
     if (s.tpv_nivel) {
         const wrapCampos = document.getElementById('wrap-campos-grupo');
         if (wrapCampos) wrapCampos.style.display = s.tpv_nivel === 'GRUPO' ? 'flex' : 'none';
@@ -361,7 +370,7 @@ function procesarExcel(tab) {
                 let tipoDetectado = isAllNumeric ? 'id' : 'nombre';
                 if (selectCampo.value !== tipoDetectado) {
                     selectCampo.value = tipoDetectado;
-                    
+
                     let idSelectTipo = tab === 'mass' ? 'tipoBusqueda' : 'tipoBusqueda_del';
                     let selectTipo = document.getElementById(idSelectTipo);
                     if (tipoDetectado === 'id' && selectTipo) {
@@ -764,6 +773,7 @@ function repintarTodasLasListasDeTiendas() {
     UI.crearListaTiendas('list-add', 'store-count-add', triggerChange);
     UI.crearListaTiendas('list-del', 'store-count-del', triggerChange);
     UI.crearListaTiendas('list-grupos', 'store-count-grupos', triggerChange);
+    UI.crearListaTiendas('list-traspaso', 'store-count-traspaso', triggerChange);
 }
 
 // ==========================================
@@ -785,6 +795,7 @@ document.addEventListener('DOMContentLoaded', () => {
     UI.crearListaTiendas('list-repair', 'store-count-repair', triggerChange);
     UI.crearListaTiendas('list-api', 'store-count-api', triggerChange);
     UI.crearListaTiendas('list-grupos', 'store-count-grupos', triggerChange)
+    UI.crearListaTiendas('list-traspaso', 'store-count-traspaso', triggerChange);
 
     // Plantillas (Add y Delete manual)
     UI.crearListaTiendas('list-add', 'store-count-add', triggerChange);
@@ -889,7 +900,7 @@ document.addEventListener('click', (e) => {
         case 'addSwapRow': addSwapRow(); break;
         case 'removeSwapRow': btn.closest('tr').remove(); guardarEstadoGlobal(); actualizarBadgeSwap(); break;
         case 'abrirApiExcel': document.getElementById('apiExcelModal').style.display = 'flex'; break;
-        UI.crearListaTiendas('list-api', 'store-count-api', () => guardarEstadoGlobal());
+            UI.crearListaTiendas('list-api', 'store-count-api', () => guardarEstadoGlobal());
             break;
         case 'generarApiExcel': ejecutarGeneracionAsincrona(btn, () => SQL.generarApiExcel()); break;
 
@@ -918,6 +929,13 @@ document.addEventListener('click', (e) => {
             break;
         case 'generarUpdateNombrePlantillas': ejecutarGeneracionAsincrona(btn, () => SQL.generarUpdateNombrePlantillas()); break;
         case 'generarConsultaPlantillas': ejecutarGeneracionAsincrona(btn, () => SQL.generarConsultaPlantillas()); break;
+        case 'generarTraspasoPlantillas': ejecutarGeneracionAsincrona(btn, () => SQL.generarTraspasoPlantillas()); break;
+        case 'swapProveedores':
+            let origen = document.getElementById('tras-prov-origen');
+            let destino = document.getElementById('tras-prov-destino');
+            let temp = origen.value; origen.value = destino.value; destino.value = temp;
+            guardarEstadoGlobal();
+            break;
     }
 });
 
@@ -936,6 +954,7 @@ document.addEventListener('input', (e) => {
     const id = e.target.id;
     if (id === 'articulos') { UI.actualizarContadorArticulosGenerico('articulos', 'art-count-mass'); }
     if (id === 'articulos_borrar') { UI.actualizarContadorArticulosGenerico('articulos_borrar', 'art-count-del'); }
+    if (id === 'tras-articulos') { UI.actualizarContadorArticulosGenerico('tras-articulos', 'art-count-traspaso'); }
 
     if (id === 'articulos_excel') { procesarExcel('mass'); guardarEstadoGlobal(); }
     if (id === 'articulos_excel_del') { procesarExcel('del'); guardarEstadoGlobal(); }
@@ -1011,16 +1030,19 @@ document.addEventListener('keyup', (e) => {
 
         if (e.target.id === 'filter-add') filtrarTiendas('list-add', 'filter-add');
         if (e.target.id === 'filter-del') filtrarTiendas('list-del', 'filter-del');
-        if (e.target.id === 'filter-api') filtrarTiendas('list-api', 'filter-api'); 
+        if (e.target.id === 'filter-api') filtrarTiendas('list-api', 'filter-api');
 
         if (e.target.id === 'search-excel-p_add') buscarExcel('p_add', e.target.value);
         if (e.target.id === 'search-excel-p_del') buscarExcel('p_del', e.target.value);
         if (e.target.id === 'search-excel-p_upd') buscarExcel('p_upd', e.target.value);
+        if (e.target.id === 'filter-traspaso') filtrarTiendas('list-traspaso', 'filter-traspaso');
+
     }, 250);
 });
 document.addEventListener('focusout', (e) => {
     if (e.target.id === 'articulos') limpiarInputArticulos('articulos');
     if (e.target.id === 'articulos_borrar') limpiarInputArticulos('articulos_borrar');
+    if (e.target.id === 'tras-articulos') limpiarInputArticulos('tras-articulos');
 });
 
 document.getElementById('importFile').addEventListener('change', function () {

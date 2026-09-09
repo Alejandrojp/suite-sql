@@ -964,6 +964,7 @@ export function copiarMasivo(btn) {
     else if (tabId === 'tab-excel-del') cleanCheckboxId = 'cleanCopyDelPlantillas';
     else if (tabId === 'tab-vaciar') cleanCheckboxId = 'cleanCopyVaciarPlantillas';
     else if (tabId === 'tab-consulta') cleanCheckboxId = 'cleanCopyConsultaPlantillas';
+    else if (tabId === 'tab-traspaso') cleanCheckboxId = 'cleanCopyTraspasoPlantillas';
 
     let isCleanCopy = document.getElementById(cleanCheckboxId) && document.getElementById(cleanCheckboxId).checked;
 
@@ -1034,7 +1035,12 @@ export function descargarSQL(type) {
         let sel = (window.fullSqlCache && window.fullSqlCache['out-consulta']) || document.getElementById('out-consulta').textContent;
         let upd = (window.fullSqlCache && window.fullSqlCache['out-update']) || document.getElementById('out-update').textContent;
         content = sel + "\n\n" + upd;
+    } else if (type === 'p_traspaso') { 
+        let tras = (window.fullSqlCache && window.fullSqlCache['out-traspaso']) || document.getElementById('out-traspaso').textContent;
+        let aud = (window.fullSqlCache && window.fullSqlCache['out-traspaso-audit']) || document.getElementById('out-traspaso-audit').textContent;
+        content = tras + "\n\n" + aud;
     }
+    
 
     if (!content || content.trim() === "") { showNotification("⚠️ Genera las consultas primero."); return; }
 
@@ -1177,6 +1183,95 @@ function calcularWhlo(visualId) {
     if (numVisual >= 3000 && numVisual <= 3999) return "E" + numVisual.toString().slice(-2);
     if (numVisual >= 4000 && numVisual <= 4999) return "K" + numVisual.toString().slice(-2);
     return visualId;
+}
+
+export function generarTraspasoPlantillas() {
+    try {
+        let artsRaw = document.getElementById('tras-articulos').value.split(/[\r\n,]+/).map(s => s.trim()).filter(s => s !== '');
+        let provOrigen = document.getElementById('tras-prov-origen').value.trim();
+        let provDestino = document.getElementById('tras-prov-destino').value.trim();
+        
+        if (artsRaw.length === 0) return showNotification("⚠️ Introduce al menos un artículo.");
+       if (!provOrigen || !provDestino) return showNotification("⚠️ Faltan los proveedores de origen y destino.");
+
+        agregarHistorial(provOrigen);
+        agregarHistorial(provDestino);
+
+        let listaArticulos = artsRaw.map(a => `'${safeInt(a)}'`).join(', ');
+        let safeOrigen = sqlEscape(provOrigen).replace(/\s+/g, '%');
+        let safeDest = sqlEscape(provDestino).replace(/\s+/g, '%');
+
+        const checkedBoxes = document.querySelectorAll('#list-traspaso .store-item input:checked');
+        let listaTiendas = Array.from(checkedBoxes).map(cb => safeInt(cb.value));
+
+        if (listaTiendas.length === 0) return showNotification("⚠️ Selecciona al menos una tienda.");
+
+        // Extraer los "t_num" de las tiendas seleccionadas para cruzarlos con el string de las plantillas (Ej: "(T71)")
+        let tNums = listaTiendas.map(dbId => {
+            const sObj = state.tiendasData.find(t => t.id === dbId);
+            return sObj ? sObj.name.split(' - ')[0].trim() : dbId;
+        }).map(t => `'${t}'`).join(', ');
+
+        const extraCols = "subfamilia, cajas, unidades, unidades_horario1, unidades_horario2, unidades_horario3, unidades_horario4, unidades_horario5, precio, orden, contacto, unidades_dia_1, unidades_dia_2, unidades_dia_3, unidades_dia_4, unidades_dia_5, unidades_dia_6, unidades_dia_7, tipo_stock_ideal, unidades_caja";
+        const extraZeros = "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0";
+
+        let sql = `
+INSERT IGNORE INTO detplantilla (codigo, articulo, stock_ideal, ${extraCols})
+SELECT c_destino.codigo, d_origen.articulo, 0, ${extraZeros}, COALESCE(MA1.tipo_venta_central, ''), COALESCE(MA1.unid_caja, 0)
+FROM detplantilla d_origen
+INNER JOIN cabplantilla c_origen ON c_origen.codigo = d_origen.codigo
+INNER JOIN cabplantilla c_destino ON 
+    SUBSTRING_INDEX(SUBSTRING_INDEX(c_destino.nombre, '(T', -1), ')', 1) = 
+    SUBSTRING_INDEX(SUBSTRING_INDEX(c_origen.nombre, '(T', -1), ')', 1)
+LEFT JOIN maeart MA1 ON MA1.codigo = d_origen.articulo AND MA1.empresa = 1
+WHERE d_origen.articulo IN (${listaArticulos})
+  AND c_origen.nombre LIKE '%${safeOrigen}%'
+  AND c_destino.nombre LIKE '%${safeDest}%'
+  AND c_destino.situacion = 'A'
+  AND SUBSTRING_INDEX(SUBSTRING_INDEX(c_origen.nombre, '(T', -1), ')', 1) IN (${tNums});
+
+UPDATE detplantilla d_destino
+INNER JOIN cabplantilla c_destino ON d_destino.codigo = c_destino.codigo
+INNER JOIN cabplantilla c_origen ON 
+    SUBSTRING_INDEX(SUBSTRING_INDEX(c_destino.nombre, '(T', -1), ')', 1) = 
+    SUBSTRING_INDEX(SUBSTRING_INDEX(c_origen.nombre, '(T', -1), ')', 1)
+INNER JOIN detplantilla d_origen ON d_origen.codigo = c_origen.codigo
+SET d_destino.stock_ideal = d_destino.stock_ideal + d_origen.stock_ideal
+WHERE d_destino.articulo IN (${listaArticulos})
+  AND d_origen.articulo IN (${listaArticulos})
+  AND c_destino.nombre LIKE '%${safeDest}%'
+  AND c_origen.nombre LIKE '%${safeOrigen}%'
+  AND SUBSTRING_INDEX(SUBSTRING_INDEX(c_origen.nombre, '(T', -1), ')', 1) IN (${tNums});
+
+DELETE d_origen
+FROM detplantilla d_origen
+INNER JOIN cabplantilla c_origen ON d_origen.codigo = c_origen.codigo
+WHERE d_origen.articulo IN (${listaArticulos})
+  AND c_origen.nombre LIKE '%${safeOrigen}%'
+  AND SUBSTRING_INDEX(SUBSTRING_INDEX(c_origen.nombre, '(T', -1), ')', 1) IN (${tNums});`;
+
+        let sqlAudit = `SELECT 
+    SUBSTRING_INDEX(SUBSTRING_INDEX(c.nombre, '(T', -1), ')', 1) AS 'Nº Tienda', 
+    c.codigo AS Codigo_Plantilla, 
+    c.nombre AS Nombre_Plantilla, 
+    d.articulo AS Articulo, 
+    d.stock_ideal AS Stock
+FROM detplantilla d
+INNER JOIN cabplantilla c ON d.codigo = c.codigo
+WHERE d.articulo IN (${listaArticulos})
+  AND (c.nombre LIKE '%${safeOrigen}%' OR c.nombre LIKE '%${safeDest}%')
+  AND c.situacion = 'A'
+  AND SUBSTRING_INDEX(SUBSTRING_INDEX(c.nombre, '(T', -1), ')', 1) IN (${tNums})
+ORDER BY \`Nº Tienda\`, c.nombre, d.articulo;`;
+
+        inyectarSQLPlantillas('res-traspaso', 'out-traspaso', wrapTransactionPlantillas(sql.trim()));
+        inyectarSQLPlantillas('res-traspaso', 'out-traspaso-audit', sqlAudit.trim());
+
+        showNotification("✅ Script de traspaso generado con éxito.");
+    } catch (error) {
+        console.error("Error en traspaso:", error);
+        showNotification("⚠️ Ocurrió un error. Revisa la consola.");
+    }
 }
 
 // IMPORTANTE: ahora es async porque necesitamos hacer fetch() de la plantilla

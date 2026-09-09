@@ -427,6 +427,7 @@ export function actualizarContador(containerId, counterId) {
     else if(containerId === 'list-add') btnId = 'btn-gen-add'; 
     else if(containerId === 'list-del') btnId = 'btn-gen-del'; 
     else if(containerId === 'list-grupos') btnId = 'btn-gen-grupos';
+    else if(containerId === 'list-traspaso') btnId = 'btn-gen-traspaso';
     
     const btn = document.getElementById(btnId);
     if(btn) {
@@ -442,7 +443,8 @@ export function actualizarContador(containerId, counterId) {
 
 // --- RENDERS VARIOS ---
 export function renderCustomGroupButtons(onClickCallback) {
-    const containers = ['dynamic-groups-mass', 'dynamic-groups-delete', 'dynamic-groups-swap', 'dynamic-groups-repair', 'dynamic-groups-add', 'dynamic-groups-del', 'dynamic-groups-grupos'];    containers.forEach(divId => {
+    const containers = ['dynamic-groups-mass', 'dynamic-groups-delete', 'dynamic-groups-swap', 'dynamic-groups-repair', 'dynamic-groups-add', 'dynamic-groups-del', 'dynamic-groups-grupos', 'dynamic-groups-traspaso'];  
+    containers.forEach(divId => {
         const div = document.getElementById(divId);
         if(!div) return;
         div.innerHTML = '';
