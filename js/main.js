@@ -1200,15 +1200,13 @@ let ocrWorkerPromise = null;
 
 function getOcrWorker() {
     if (!ocrWorkerPromise) {
-        // Inicialización compatible con Tesseract.js v4
         ocrWorkerPromise = (async () => {
-            const worker = Tesseract.createWorker();
-            await worker.load();
+            const worker = await Tesseract.createWorker();
             await worker.loadLanguage('spa+eng');
             await worker.initialize('spa+eng');
             return worker;
         })().catch(err => {
-            ocrWorkerPromise = null; // permite reintentar si falla la creación
+            ocrWorkerPromise = null; 
             throw err;
         });
     }
