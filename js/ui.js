@@ -1,6 +1,13 @@
 // js/ui.js
 import { state, EXCEL_ITEMS_PER_PAGE, toggleGrupoColapsado } from './state.js';
 
+// Escapa texto antes de insertarlo por innerHTML, para que nombres/valores
+// escritos o pegados por el usuario nunca rompan el HTML ni inyecten markup.
+export function escapeHTML(str) {
+    if (str === null || str === undefined) return '';
+    return str.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
 // --- NOTIFICACIONES Y PORTAPAPELES ---
 export function showNotification(msg) {
     const area = document.getElementById('notification-area');
@@ -209,11 +216,6 @@ export function renderPreviewTable(tab) {
     let startIdx = (state.excel[tab].page - 1) * EXCEL_ITEMS_PER_PAGE;
     let endIdx = startIdx + EXCEL_ITEMS_PER_PAGE;
     let pageData = filteredData.slice(startIdx, endIdx);
-
-    const escapeHTML = (str) => {
-        if (!str) return '';
-        return str.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-    };
 
     pageData.forEach(row => {
         let tr = document.createElement('tr');

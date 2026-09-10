@@ -1194,21 +1194,128 @@ function getExpectedColumnsForTarget(targetId) {
 }
 
 // ==========================================
-// ESTADO DEL MODAL OCR
+// MOTOR OCR PERSISTENTE (evita crear/destruir el worker en cada análisis)
 // ==========================================
-// Normaliza texto para comparar nombres de tienda ignorando mayúsculas, acentos
-// y puntuación (así "Àrees" y "areas" o "C.C. Splau" y "cc splau" se detectan igual)
-function normalizarTexto(str) {
-    return (str || '')
-        .toString()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .toUpperCase()
-        .replace(/[^A-Z0-9 ]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+let ocrWorkerPromise = null;
+
+function getOcrWorker() {
+    if (!ocrWorkerPromise) {
+        // createWorker('spa+eng') carga idiomas e inicializa el motor una sola vez.
+        // A partir de aquí se reutiliza para todos los análisis de la sesión.
+        ocrWorkerPromise = Tesseract.createWorker('spa+eng').catch(err => {
+            ocrWorkerPromise = null; // si falla la creación, permite reintentar la próxima vez
+            throw err;
+        });
+    }
+    return ocrWorkerPromise;
 }
 
+// Si el worker se queda en un estado roto tras un error de reconocimiento,
+// lo descartamos para que el siguiente intento cree uno nuevo desde cero.
+async function resetOcrWorkerSiCorrupto() {
+    try {
+        const worker = await ocrWorkerPromise;
+        await worker.terminate();
+    } catch (e) { /* noop */ }
+    ocrWorkerPromise = null;
+}
+
+// ==========================================
+// PREPROCESADO DE IMAGEN (mejora capturas borrosas o de baja resolución)
+// Aplica: escala de grises, estiramiento de contraste y upscale si la imagen es pequeña.
+// ==========================================
+async function preprocessImageForOCR(file) {
+    const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+
+    const img = await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = dataUrl;
+    });
+
+    // Si la imagen es pequeña (típico de capturas de WhatsApp comprimidas), la ampliamos
+    // para dar más detalle al OCR. Si ya es grande, no la tocamos (máx. x3).
+    const MIN_DIMENSION = 1200;
+    const scale = Math.min(3, Math.max(1, MIN_DIMENSION / Math.max(img.width, img.height)));
+    const w = Math.round(img.width * scale);
+    const h = Math.round(img.height * scale);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const data = imageData.data;
+    const grays = new Float32Array(w * h);
+    let min = 255, max = 0;
+
+    // 1) Escala de grises (luminancia)
+    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        grays[p] = gray;
+        if (gray < min) min = gray;
+        if (gray > max) max = gray;
+    }
+
+    // 2) Estiramiento de contraste (normaliza el rango real de grises a 0-255)
+    //    más un refuerzo adicional para que el texto quede más nítido frente al fondo.
+    const range = Math.max(1, max - min);
+    const contrastBoost = 1.35;
+    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+        let v = ((grays[p] - min) / range) * 255;
+        v = ((v - 128) * contrastBoost) + 128;
+        v = v < 0 ? 0 : (v > 255 ? 255 : v);
+        data[i] = data[i + 1] = data[i + 2] = v;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    return canvas;
+}
+
+// Extrae el número "correcto" de una línea cuando hay varios candidatos, en vez de
+// asumir siempre que el código es el primer número que aparece. Usa el contexto
+// disponible (tiendas conocidas, longitud típica de artículo) para decidir.
+function extraerNumeroDeLinea(line, modo, idsTiendasConocidas) {
+    const nums = line.match(/\d+/g) || [];
+    if (nums.length === 0) return null;
+    if (nums.length === 1) return { valor: nums[0], seguro: true };
+
+    if (modo === 'tiendas') {
+        const conocidos = nums.filter(n => idsTiendasConocidas.has(n));
+        if (conocidos.length === 1) return { valor: conocidos[0], seguro: true };
+    } else {
+        // Artículos: en el resto de la app un código válido tiene entre 3 y 6 dígitos.
+        const validos = nums.filter(n => n.length >= 3 && n.length <= 6);
+        if (validos.length === 1) return { valor: validos[0], seguro: true };
+    }
+
+    // Ambiguo (p. ej. "35  ART 12345"): no asumimos posición, cogemos el primero
+    // pero lo marcamos para que el usuario lo revise antes de insertar.
+    return { valor: nums[0], seguro: false };
+}
+
+// ==========================================
+// ESTADO DEL MODAL OCR
+// ==========================================
 let ocrModal = { targetId: null, imageFile: null, rows: [], cols: 1 };
+
+// Determina si el campo destino es una TABLA EXCEL de Tienda+Artículo (2-4 columnas)
+// o una lista plana de artículos con selector de tiendas aparte (checkboxes).
+function targetEsTablaExcelTienda(targetId) {
+    if (!['articulos_excel', 'paste-add', 'paste-del'].includes(targetId)) return false;
+    const radioName = targetId === 'articulos_excel' ? 'modo_masivo' : (targetId === 'paste-add' ? 'modo_p_add' : 'modo_p_del');
+    return document.querySelector(`input[name="${radioName}"]:checked`)?.value === 'excel_tienda';
+}
 
 // Abre el popup de escaneo para un campo concreto, preseleccionando el modo más lógico
 function abrirOcrModal(targetId) {
@@ -1228,9 +1335,7 @@ function abrirOcrModal(targetId) {
     let modoSugerido = 'articulos';
     if (targetId === 'pasteInput') modoSugerido = 'tiendas';
     else if (ocrModal.cols >= 2) {
-        const esTiendaArticulo = ['articulos_excel', 'paste-add', 'paste-del'].includes(targetId)
-            && document.querySelector(`input[name="modo_${targetId === 'articulos_excel' ? 'masivo' : (targetId === 'paste-add' ? 'p_add' : 'p_del')}"]:checked`)?.value === 'excel_tienda';
-        modoSugerido = esTiendaArticulo ? 'ambos' : 'articulos';
+        modoSugerido = targetEsTablaExcelTienda(targetId) ? 'ambos' : 'articulos';
     }
     const radio = document.querySelector(`input[name="ocr_modo"][value="${modoSugerido}"]`);
     if (radio) radio.checked = true;
@@ -1261,10 +1366,17 @@ async function procesarOcrModal() {
     const modo = document.querySelector('input[name="ocr_modo"]:checked')?.value || 'articulos';
     const btn = document.getElementById('btn-ocr-procesar');
     btn.disabled = true;
-    btn.innerText = '⏳ Analizando con IA...';
+    btn.innerText = '🖼️ Mejorando imagen...';
 
     try {
-        const result = await Tesseract.recognize(ocrModal.imageFile, 'spa+eng');
+        // 1) Preprocesado: escala de grises + contraste + upscale (ayuda con fotos borrosas o de baja resolución)
+        const preprocessedImage = await preprocessImageForOCR(ocrModal.imageFile);
+
+        btn.innerText = '⏳ Analizando con IA...';
+
+        // 2) Motor OCR reutilizable: no se crea un worker nuevo en cada análisis
+        const worker = await getOcrWorker();
+        const result = await worker.recognize(preprocessedImage);
         const text = result.data.text;
         const idsTiendasConocidas = new Set((State.state.tiendasData || []).map(t => String(t.id)));
 
@@ -1286,63 +1398,18 @@ async function procesarOcrModal() {
                 rows.push({ tienda, articulo, seguro });
             });
             if (dudosas > 0) note = `⚠️ ${dudosas} fila(s) no coincidían con ninguna tienda conocida: se han dejado en el orden leído (Tienda, Artículo). Revísalas antes de insertar.`;
-        } else if (modo === 'tiendas') {
-            // Las tiendas son un universo CERRADO y conocido (state.tiendasData), así que
-            // podemos reconocerlas por código Y por nombre, no solo por número:
-            //  1) Código correcto y conocido -> se usa tal cual.
-            //  2) Nombre de tienda detectado en la línea -> se traduce a su código
-            //     (esto "rescata" el dato aunque el número esté mal leído por el OCR,
-            //     o aunque la captura no traiga número en absoluto, solo texto).
-            //  3) Número presente pero que no coincide ni con código ni con nombre
-            //     conocido -> se deja igualmente pero marcado para revisar.
-            //  4) Línea sin número ni nombre reconocible (p.ej. "PARA ESTAS TIENDAS:",
-            //     "AÑADIR ESTE ARTÍCULO") -> se ignora, no aporta ninguna tienda.
-            const nameIndex = (State.state.tiendasData || []).map(t => ({
-                id: String(t.id),
-                nombre: normalizarTexto(String(t.name).replace(/^\s*\d+\s*-\s*/, ''))
-            })).filter(t => t.nombre.length >= 3); // nombres muy cortos dan falsos positivos
-
+        } else {
+            // Solo artículos o solo tiendas: un número por línea, sin asumir que el código
+            // es siempre el primer número que aparece en ella.
             const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
             let dudosas = 0;
-
             lines.forEach(line => {
-                const numMatch = (line.match(/\d+/) || [])[0];
-
-                if (numMatch && idsTiendasConocidas.has(numMatch)) {
-                    rows.push({ valor: numMatch, seguro: true });
-                    return;
-                }
-
-                const lineNorm = normalizarTexto(line);
-                let mejorMatch = null;
-                nameIndex.forEach(t => {
-                    if (lineNorm.includes(t.nombre) && (!mejorMatch || t.nombre.length > mejorMatch.nombre.length)) {
-                        mejorMatch = t; // nos quedamos con el nombre más largo (más específico) que encaje
-                    }
-                });
-                if (mejorMatch) {
-                    rows.push({ valor: mejorMatch.id, seguro: true });
-                    return;
-                }
-
-                if (numMatch) {
-                    rows.push({ valor: numMatch, seguro: false });
-                    dudosas++;
-                }
-                // si no hay ni número ni nombre reconocible, se descarta la línea
+                const r = extraerNumeroDeLinea(line, modo, idsTiendasConocidas);
+                if (!r) return;
+                if (!r.seguro) dudosas++;
+                rows.push(r);
             });
-
-            if (dudosas > 0) note = `⚠️ ${dudosas} valor(es) leído(s) no coinciden con ninguna tienda conocida (ni por código ni por nombre). Revísalos antes de insertar.`;
-        } else {
-            // Solo artículos: lista plana.
-            // Se coge SOLO el primer número de cada línea (el código, que va siempre
-            // en la primera columna), ignorando el resto de números que puedan aparecer
-            // en la descripción (pesos "140G", porcentajes "50%", tallas, etc.)
-            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-            rows = lines
-                .map(line => (line.match(/\d+/) || [])[0])
-                .filter(Boolean)
-                .map(n => ({ valor: n }));
+            if (dudosas > 0) note = `⚠️ ${dudosas} fila(s) tenían varios números y no se pudo identificar el código con total seguridad: se ha cogido el primero. Revísalas antes de insertar.`;
         }
 
         ocrModal.rows = rows;
@@ -1354,6 +1421,9 @@ async function procesarOcrModal() {
     } catch (error) {
         console.error("Error en motor OCR:", error);
         UI.showNotification("❌ Error crítico procesando la imagen.");
+        // Si el worker ha quedado en un estado inconsistente, lo descartamos para
+        // que el próximo intento arranque uno limpio en vez de repetir el mismo fallo.
+        await resetOcrWorkerSiCorrupto();
     } finally {
         btn.disabled = false;
         btn.innerText = '🔎 Analizar Imagen';
@@ -1376,9 +1446,8 @@ function pintarPreviewOcrModal(modo, note) {
                 <td>${r.seguro ? '✅' : '⚠️ revisar'}</td>
             </tr>`).join('') + '</tbody>';
     } else {
-        const showCheck = modo === 'tiendas';
-        table.innerHTML = `<thead><tr><th>${modo === 'tiendas' ? 'Tienda' : 'Artículo'}</th>${showCheck ? '<th></th>' : ''}</tr></thead><tbody>` +
-            ocrModal.rows.map(r => `<tr><td>${r.valor}</td>${showCheck ? `<td>${r.seguro ? '✅' : '⚠️ revisar'}</td>` : ''}</tr>`).join('') + '</tbody>';
+        table.innerHTML = `<thead><tr><th>${modo === 'tiendas' ? 'Tienda' : 'Artículo'}</th><th></th></tr></thead><tbody>` +
+            ocrModal.rows.map(r => `<tr><td>${r.valor}</td><td>${r.seguro === false ? '⚠️ revisar' : '✅'}</td></tr>`).join('') + '</tbody>';
     }
 
     box.style.display = 'block';
@@ -1386,7 +1455,11 @@ function pintarPreviewOcrModal(modo, note) {
     btnInsertar.style.display = 'inline-block';
 }
 
-// Inserta lo revisado en el campo real (append, nunca borra lo que ya había)
+// Inserta lo revisado en el campo real (append, nunca borra lo que ya había).
+// En modo "ambos": si el destino es una tabla Excel real, se escriben los pares
+// tienda+articulo; si es una lista plana de artículos, se marcan las tiendas en
+// su selector (si se encuentra uno en la misma pestaña) y solo se insertan los
+// códigos de artículo, sin duplicados.
 function insertarOcrModal() {
     const targetEl = document.getElementById(ocrModal.targetId);
     if (!targetEl || ocrModal.rows.length === 0) return;
@@ -1395,7 +1468,18 @@ function insertarOcrModal() {
     let lines = [];
 
     if (modo === 'ambos') {
-        lines = ocrModal.rows.map(r => `${r.tienda}\t${r.articulo}`);
+        if (targetEsTablaExcelTienda(ocrModal.targetId)) {
+            lines = ocrModal.rows.map(r => `${r.tienda}\t${r.articulo}`);
+        } else {
+            const storeList = targetEl.closest('.tab-content')?.querySelector('.store-list');
+            if (storeList) {
+                const tiendasUnicas = [...new Set(ocrModal.rows.map(r => r.tienda))];
+                aplicarGrupoPersonalizado(storeList.id, tiendasUnicas);
+            } else {
+                UI.showNotification("⚠️ No se ha encontrado un selector de tiendas en esta pestaña: revisa las tiendas manualmente.");
+            }
+            lines = [...new Set(ocrModal.rows.map(r => r.articulo))];
+        }
     } else {
         lines = ocrModal.rows.map(r => r.valor);
     }

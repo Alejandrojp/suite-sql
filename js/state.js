@@ -51,7 +51,10 @@ export function restaurarTiendasOriginales() {
 // --- GESTIÓN DE GRUPOS PERSONALIZADOS ---
 export function cargarGruposPersonalizados() {
     const saved = localStorage.getItem('sqlGenCustomGroups');
-    if (saved) state.customGroups = JSON.parse(saved);
+    if (saved) {
+        try { state.customGroups = JSON.parse(saved); }
+        catch (e) { console.warn('sqlGenCustomGroups corrupto, se ignora.', e); state.customGroups = {}; }
+    }
     return state.customGroups;
 }
 
@@ -68,7 +71,10 @@ export function borrarGrupoCustom(name) {
 // --- GESTIÓN DE HISTORIAL ---
 export function cargarHistorial() {
     const saved = localStorage.getItem('sqlGroupHistory');
-    if (saved) state.groupHistory = JSON.parse(saved);
+    if (saved) {
+        try { state.groupHistory = JSON.parse(saved); }
+        catch (e) { console.warn('sqlGroupHistory corrupto, se ignora.', e); state.groupHistory = []; }
+    }
     return state.groupHistory;
 }
 
@@ -89,7 +95,10 @@ export function borrarHistorialLocal() {
 // --- ACORDEONES COLAPSADOS ---
 export function cargarGruposColapsados() {
     const savedCollapsed = localStorage.getItem('sqlGenCollapsedGroups');
-    if (savedCollapsed) state.collapsedGroups = JSON.parse(savedCollapsed);
+    if (savedCollapsed) {
+        try { state.collapsedGroups = JSON.parse(savedCollapsed); }
+        catch (e) { console.warn('sqlGenCollapsedGroups corrupto, se ignora.', e); state.collapsedGroups = {}; }
+    }
 }
 
 export function toggleGrupoColapsado(groupId) {
@@ -106,7 +115,9 @@ export function guardarEstadoFormulario(formStateObj) {
 
 export function cargarEstadoFormulario() {
     const saved = localStorage.getItem('sqlGenState');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    try { return JSON.parse(saved); }
+    catch (e) { console.warn('sqlGenState corrupto, se ignora.', e); return null; }
 }
 
 export function limpiarEstadoCompleto() {
