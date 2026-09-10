@@ -1196,6 +1196,18 @@ function getExpectedColumnsForTarget(targetId) {
 // ==========================================
 // ESTADO DEL MODAL OCR
 // ==========================================
+// Normaliza texto para comparar nombres de tienda ignorando mayúsculas, acentos
+// y puntuación (así "Àrees" y "areas" o "C.C. Splau" y "cc splau" se detectan igual)
+function normalizarTexto(str) {
+    return (str || '')
+        .toString()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9 ]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 let ocrModal = { targetId: null, imageFile: null, rows: [], cols: 1 };
 
 // Abre el popup de escaneo para un campo concreto, preseleccionando el modo más lógico
@@ -1274,8 +1286,55 @@ async function procesarOcrModal() {
                 rows.push({ tienda, articulo, seguro });
             });
             if (dudosas > 0) note = `⚠️ ${dudosas} fila(s) no coincidían con ninguna tienda conocida: se han dejado en el orden leído (Tienda, Artículo). Revísalas antes de insertar.`;
+        } else if (modo === 'tiendas') {
+            // Las tiendas son un universo CERRADO y conocido (state.tiendasData), así que
+            // podemos reconocerlas por código Y por nombre, no solo por número:
+            //  1) Código correcto y conocido -> se usa tal cual.
+            //  2) Nombre de tienda detectado en la línea -> se traduce a su código
+            //     (esto "rescata" el dato aunque el número esté mal leído por el OCR,
+            //     o aunque la captura no traiga número en absoluto, solo texto).
+            //  3) Número presente pero que no coincide ni con código ni con nombre
+            //     conocido -> se deja igualmente pero marcado para revisar.
+            //  4) Línea sin número ni nombre reconocible (p.ej. "PARA ESTAS TIENDAS:",
+            //     "AÑADIR ESTE ARTÍCULO") -> se ignora, no aporta ninguna tienda.
+            const nameIndex = (State.state.tiendasData || []).map(t => ({
+                id: String(t.id),
+                nombre: normalizarTexto(String(t.name).replace(/^\s*\d+\s*-\s*/, ''))
+            })).filter(t => t.nombre.length >= 3); // nombres muy cortos dan falsos positivos
+
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            let dudosas = 0;
+
+            lines.forEach(line => {
+                const numMatch = (line.match(/\d+/) || [])[0];
+
+                if (numMatch && idsTiendasConocidas.has(numMatch)) {
+                    rows.push({ valor: numMatch, seguro: true });
+                    return;
+                }
+
+                const lineNorm = normalizarTexto(line);
+                let mejorMatch = null;
+                nameIndex.forEach(t => {
+                    if (lineNorm.includes(t.nombre) && (!mejorMatch || t.nombre.length > mejorMatch.nombre.length)) {
+                        mejorMatch = t; // nos quedamos con el nombre más largo (más específico) que encaje
+                    }
+                });
+                if (mejorMatch) {
+                    rows.push({ valor: mejorMatch.id, seguro: true });
+                    return;
+                }
+
+                if (numMatch) {
+                    rows.push({ valor: numMatch, seguro: false });
+                    dudosas++;
+                }
+                // si no hay ni número ni nombre reconocible, se descarta la línea
+            });
+
+            if (dudosas > 0) note = `⚠️ ${dudosas} valor(es) leído(s) no coinciden con ninguna tienda conocida (ni por código ni por nombre). Revísalos antes de insertar.`;
         } else {
-            // Solo artículos o solo tiendas: lista plana.
+            // Solo artículos: lista plana.
             // Se coge SOLO el primer número de cada línea (el código, que va siempre
             // en la primera columna), ignorando el resto de números que puedan aparecer
             // en la descripción (pesos "140G", porcentajes "50%", tallas, etc.)
@@ -1317,8 +1376,9 @@ function pintarPreviewOcrModal(modo, note) {
                 <td>${r.seguro ? '✅' : '⚠️ revisar'}</td>
             </tr>`).join('') + '</tbody>';
     } else {
-        table.innerHTML = `<thead><tr><th>${modo === 'tiendas' ? 'Tienda' : 'Artículo'}</th></tr></thead><tbody>` +
-            ocrModal.rows.map(r => `<tr><td>${r.valor}</td></tr>`).join('') + '</tbody>';
+        const showCheck = modo === 'tiendas';
+        table.innerHTML = `<thead><tr><th>${modo === 'tiendas' ? 'Tienda' : 'Artículo'}</th>${showCheck ? '<th></th>' : ''}</tr></thead><tbody>` +
+            ocrModal.rows.map(r => `<tr><td>${r.valor}</td>${showCheck ? `<td>${r.seguro ? '✅' : '⚠️ revisar'}</td>` : ''}</tr>`).join('') + '</tbody>';
     }
 
     box.style.display = 'block';
