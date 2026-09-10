@@ -1275,9 +1275,15 @@ async function procesarOcrModal() {
             });
             if (dudosas > 0) note = `⚠️ ${dudosas} fila(s) no coincidían con ninguna tienda conocida: se han dejado en el orden leído (Tienda, Artículo). Revísalas antes de insertar.`;
         } else {
-            // Solo artículos o solo tiendas: lista plana, un número por línea
-            const numbers = text.match(/\d+/g) || [];
-            rows = numbers.map(n => ({ valor: n }));
+            // Solo artículos o solo tiendas: lista plana.
+            // Se coge SOLO el primer número de cada línea (el código, que va siempre
+            // en la primera columna), ignorando el resto de números que puedan aparecer
+            // en la descripción (pesos "140G", porcentajes "50%", tallas, etc.)
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            rows = lines
+                .map(line => (line.match(/\d+/) || [])[0])
+                .filter(Boolean)
+                .map(n => ({ valor: n }));
         }
 
         ocrModal.rows = rows;
