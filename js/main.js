@@ -1161,6 +1161,24 @@ document.addEventListener('keydown', (e) => {
 // 5. MOTOR OCR (TESSERACT.JS)
 // ==========================================
 
+// Determina cuántas columnas (Tienda/Artículo/Grupo...) espera el campo destino,
+// para que el OCR no mezcle tienda y artículo en una sola lista plana.
+function getExpectedColumnsForTarget(targetId) {
+    const modoMasivo = document.querySelector('input[name="modo_masivo"]:checked')?.value;
+    const modoPAdd = document.querySelector('input[name="modo_p_add"]:checked')?.value;
+    const modoPDel = document.querySelector('input[name="modo_p_del"]:checked')?.value;
+
+    switch (targetId) {
+        case 'articulos_excel':      return modoMasivo === 'excel_tienda' ? 3 : 2; // Tienda/Art/Grupo o Art/Grupo
+        case 'articulos_excel_del':  return 2; // Artículo, Grupo
+        case 'articulos_excel_swap': return 2; // ID Viejo, ID Nuevo
+        case 'articulos_swap':       return 2; // ID Viejo, ID Nuevo (modo manual)
+        case 'paste-add':            return modoPAdd === 'excel_tienda' ? 4 : 3; // Tienda/Art/Stock/Prov o Cod/Art/Stock
+        case 'paste-del':            return modoPDel === 'excel_tienda' ? 3 : 2; // Tienda/Art/Prov o Cod/Art
+        default:                     return 1; // Listas simples: articulos, prov-articulos, etc.
+    }
+}
+
 // FUNCIÓN CENTRAL DE PROCESAMIENTO OCR
 async function procesarImagenOCR(imageFile, targetId) {
     const targetEl = document.getElementById(targetId);
@@ -1181,12 +1199,26 @@ async function procesarImagenOCR(imageFile, targetId) {
         const result = await Tesseract.recognize(imageFile, 'spa+eng');
         const text = result.data.text;
 
-        // Extracción estricta de secuencias numéricas
-        const numbers = text.match(/\d+/g) || [];
-        
-        if (numbers.length > 0) {
+        // Extracción de secuencias numéricas, respetando columnas (Tienda/Artículo/Grupo)
+        const cols = getExpectedColumnsForTarget(targetId);
+        let extracted = [];
+
+        if (cols === 1) {
+            // Listas simples: cualquier número suelto, uno por línea (comportamiento original)
+            extracted = text.match(/\d+/g) || [];
+        } else {
+            // Modo tabla: cada LÍNEA de la captura debe aportar 'cols' números.
+            // Así no se mezclan tienda y artículo en la misma columna.
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            lines.forEach(line => {
+                const nums = line.match(/\d+/g) || [];
+                if (nums.length > 0) extracted.push(nums.slice(0, cols).join('\t'));
+            });
+        }
+
+        if (extracted.length > 0) {
             // Combinar con lo que ya hubiera, separar por saltos de línea
-            const newValue = (originalValue ? originalValue + '\n' : '') + numbers.join('\n');
+            const newValue = (originalValue ? originalValue + '\n' : '') + extracted.join('\n');
             targetEl.value = newValue;
             
             // Forzar reactividad del ecosistema actual (autoguardado, limpieza de duplicados y contadores)
@@ -1194,7 +1226,8 @@ async function procesarImagenOCR(imageFile, targetId) {
             targetEl.dispatchEvent(new Event('focusout'));
             
             if(window.UI && window.UI.showNotification) {
-                window.UI.showNotification(`✅ OCR: Extraídos ${numbers.length} números de la imagen.`);
+                const totalNums = cols === 1 ? extracted.length : extracted.length * cols;
+                window.UI.showNotification(`✅ OCR: Extraídos ${totalNums} números (${extracted.length} filas) de la imagen.`);
             }
         } else {
             targetEl.value = originalValue;
