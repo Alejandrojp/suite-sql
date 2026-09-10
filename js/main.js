@@ -504,19 +504,24 @@ function limpiarInputArticulos(id, badgeId) {
     let textarea = document.getElementById(id);
     if (!textarea) return;
     let raw = textarea.value;
-    
+
     let cleanArray = raw.split(/[\r\n,\t\s]+/)
                         .map(s => s.replace(/\D/g, '')) // Extrae estrictamente solo los números
                         .filter(s => s !== '');         // Filtra los bloques vacíos
-                        
+
+    // Si el usuario ha escrito algo pero no se ha podido extraer ningún número válido,
+    // NO vaciamos el campo (antes esto borraba todo lo escrito). Simplemente no tocamos nada
+    // para que pueda seguir editando sin perder lo que llevaba.
+    if (raw.trim() !== '' && cleanArray.length === 0) return;
+
     let uniqueArray = [...new Set(cleanArray)];
-    
+
     if (cleanArray.length !== uniqueArray.length) {
         UI.showNotification(`⚠️ Se eliminaron ${cleanArray.length - uniqueArray.length} duplicados.`);
     }
-    
+
     let cleanText = uniqueArray.join('\n');
-    
+
     if (raw !== cleanText) {
         textarea.value = cleanText;
         UI.actualizarContadorArticulosGenerico(id, badgeId);
@@ -878,11 +883,14 @@ document.addEventListener('click', (e) => {
     if (!btn) return;
 
     switch (btn.dataset.action) {
-        case 'triggerOCR': 
-            const ocrInput = document.getElementById('ocr-upload-input');
-            ocrInput.dataset.currentTarget = btn.dataset.target; 
-            ocrInput.click(); 
+        case 'triggerOCR':
+            abrirOcrModal(btn.dataset.target);
             break;
+        case 'ocrDropZoneClick':
+            document.getElementById('ocr-upload-input').click();
+            break;
+        case 'procesarOcrModal': procesarOcrModal(); break;
+        case 'insertarOcrModal': insertarOcrModal(); break;
         case 'abrirConversorTiendas': document.getElementById('inputNumsTienda').value = ''; UI.openModal('conversorModal'); document.getElementById('inputNumsTienda').focus(); break;
         case 'abrirEditorTiendas': abrirEditorTiendas(); break;
         case 'borrarHistorial': if (confirm("¿Borrar historial?")) { State.borrarHistorialLocal(); UI.cargarHistorialUI(); UI.showNotification("Historial borrado."); } break;
@@ -1179,106 +1187,177 @@ function getExpectedColumnsForTarget(targetId) {
     }
 }
 
-// FUNCIÓN CENTRAL DE PROCESAMIENTO OCR
-async function procesarImagenOCR(imageFile, targetId) {
-    const targetEl = document.getElementById(targetId);
-    if (!targetEl) return;
-    
-    // Guardar estado visual previo
-    const originalPlaceholder = targetEl.placeholder;
-    const originalValue = targetEl.value;
+// ==========================================
+// ESTADO DEL MODAL OCR
+// ==========================================
+let ocrModal = { targetId: null, imageFile: null, rows: [], cols: 1 };
 
-    // UX: Estado de carga
-    targetEl.value = '';
-    targetEl.placeholder = '⏳ Analizando imagen con IA (Tesseract OCR)...';
-    targetEl.disabled = true;
-    document.body.style.cursor = 'wait';
+// Abre el popup de escaneo para un campo concreto, preseleccionando el modo más lógico
+function abrirOcrModal(targetId) {
+    ocrModal = { targetId, imageFile: null, rows: [], cols: getExpectedColumnsForTarget(targetId) };
+
+    document.getElementById('ocr-preview-img').style.display = 'none';
+    document.getElementById('ocr-preview-img').src = '';
+    document.getElementById('ocr-drop-placeholder').style.display = 'block';
+    document.getElementById('ocr-result-preview').style.display = 'none';
+    document.getElementById('ocr-result-note').style.display = 'none';
+    document.getElementById('btn-ocr-insertar').style.display = 'none';
+    document.getElementById('btn-ocr-procesar').style.display = 'inline-block';
+    document.getElementById('btn-ocr-procesar').disabled = false;
+    document.getElementById('btn-ocr-procesar').innerText = '🔎 Analizar Imagen';
+
+    // Preselecciona el radio más lógico según el campo de destino, pero el usuario puede cambiarlo
+    let modoSugerido = 'articulos';
+    if (targetId === 'pasteInput') modoSugerido = 'tiendas';
+    else if (ocrModal.cols >= 2) {
+        const esTiendaArticulo = ['articulos_excel', 'paste-add', 'paste-del'].includes(targetId)
+            && document.querySelector(`input[name="modo_${targetId === 'articulos_excel' ? 'masivo' : (targetId === 'paste-add' ? 'p_add' : 'p_del')}"]:checked`)?.value === 'excel_tienda';
+        modoSugerido = esTiendaArticulo ? 'ambos' : 'articulos';
+    }
+    const radio = document.querySelector(`input[name="ocr_modo"][value="${modoSugerido}"]`);
+    if (radio) radio.checked = true;
+
+    UI.openModal('ocrModal');
+    document.getElementById('ocr-drop-zone').focus();
+}
+
+// Guarda la imagen (subida o pegada) en el estado del modal y la previsualiza, sin tocar aún el campo real
+function setOcrModalImage(file) {
+    if (!file) return;
+    ocrModal.imageFile = file;
+    const img = document.getElementById('ocr-preview-img');
+    img.src = URL.createObjectURL(file);
+    img.style.display = 'block';
+    document.getElementById('ocr-drop-placeholder').style.display = 'none';
+    document.getElementById('ocr-result-preview').style.display = 'none';
+    document.getElementById('btn-ocr-insertar').style.display = 'none';
+}
+
+// Analiza la imagen guardada: extrae números por línea y, en modo "ambos", detecta
+// automáticamente cuál de los dos números es una tienda conocida y cuál un artículo.
+async function procesarOcrModal() {
+    if (!ocrModal.imageFile) {
+        UI.showNotification("⚠️ Primero pega o sube una captura.");
+        return;
+    }
+    const modo = document.querySelector('input[name="ocr_modo"]:checked')?.value || 'articulos';
+    const btn = document.getElementById('btn-ocr-procesar');
+    btn.disabled = true;
+    btn.innerText = '⏳ Analizando con IA...';
 
     try {
-        // Ejecución de OCR en español e inglés para mayor precisión numérica
-        const result = await Tesseract.recognize(imageFile, 'spa+eng');
+        const result = await Tesseract.recognize(ocrModal.imageFile, 'spa+eng');
         const text = result.data.text;
+        const idsTiendasConocidas = new Set((State.state.tiendasData || []).map(t => String(t.id)));
 
-        // Extracción de secuencias numéricas, respetando columnas (Tienda/Artículo/Grupo)
-        const cols = getExpectedColumnsForTarget(targetId);
-        let extracted = [];
+        let rows = [];
+        let note = '';
 
-        if (cols === 1) {
-            // Listas simples: cualquier número suelto, uno por línea (comportamiento original)
-            extracted = text.match(/\d+/g) || [];
-        } else {
-            // Modo tabla: cada LÍNEA de la captura debe aportar 'cols' números.
-            // Así no se mezclan tienda y artículo en la misma columna.
+        if (modo === 'ambos') {
+            // Cada línea debe aportar (al menos) 2 números: uno es tienda, otro artículo
             const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            let dudosas = 0;
             lines.forEach(line => {
                 const nums = line.match(/\d+/g) || [];
-                if (nums.length > 0) extracted.push(nums.slice(0, cols).join('\t'));
+                if (nums.length < 2) return;
+                const [a, b] = nums;
+                let tienda, articulo, seguro = true;
+                if (idsTiendasConocidas.has(a) && !idsTiendasConocidas.has(b)) { tienda = a; articulo = b; }
+                else if (idsTiendasConocidas.has(b) && !idsTiendasConocidas.has(a)) { tienda = b; articulo = a; }
+                else { tienda = a; articulo = b; seguro = false; dudosas++; } // sin coincidencia clara: orden por defecto
+                rows.push({ tienda, articulo, seguro });
             });
+            if (dudosas > 0) note = `⚠️ ${dudosas} fila(s) no coincidían con ninguna tienda conocida: se han dejado en el orden leído (Tienda, Artículo). Revísalas antes de insertar.`;
+        } else {
+            // Solo artículos o solo tiendas: lista plana, un número por línea
+            const numbers = text.match(/\d+/g) || [];
+            rows = numbers.map(n => ({ valor: n }));
         }
 
-        if (extracted.length > 0) {
-            // Combinar con lo que ya hubiera, separar por saltos de línea
-            const newValue = (originalValue ? originalValue + '\n' : '') + extracted.join('\n');
-            targetEl.value = newValue;
-            
-            // Forzar reactividad del ecosistema actual (autoguardado, limpieza de duplicados y contadores)
-            targetEl.dispatchEvent(new Event('input'));
-            targetEl.dispatchEvent(new Event('focusout'));
-            
-            if(window.UI && window.UI.showNotification) {
-                const totalNums = cols === 1 ? extracted.length : extracted.length * cols;
-                window.UI.showNotification(`✅ OCR: Extraídos ${totalNums} números (${extracted.length} filas) de la imagen.`);
-            }
-        } else {
-            targetEl.value = originalValue;
-            if(window.UI && window.UI.showNotification) {
-                window.UI.showNotification("⚠️ OCR: No se detectaron números claros en la imagen.");
-            }
+        ocrModal.rows = rows;
+        pintarPreviewOcrModal(modo, note);
+
+        if (rows.length === 0) {
+            UI.showNotification("⚠️ OCR: No se detectaron números claros en la imagen.");
         }
     } catch (error) {
         console.error("Error en motor OCR:", error);
-        targetEl.value = originalValue;
-        if(window.UI && window.UI.showNotification) {
-            window.UI.showNotification("❌ Error crítico procesando la imagen.");
-        }
+        UI.showNotification("❌ Error crítico procesando la imagen.");
     } finally {
-        // Restaurar estado visual
-        targetEl.placeholder = originalPlaceholder;
-        targetEl.disabled = false;
-        document.body.style.cursor = 'default';
-        targetEl.focus(); // Devolver el foco al usuario
+        btn.disabled = false;
+        btn.innerText = '🔎 Analizar Imagen';
     }
 }
 
-// 1. DISPARADOR POR BOTÓN (Subir archivo manual / Cámara en móvil)
+function pintarPreviewOcrModal(modo, note) {
+    const box = document.getElementById('ocr-result-preview');
+    const table = document.getElementById('ocr-result-table');
+    const noteEl = document.getElementById('ocr-result-note');
+    const btnInsertar = document.getElementById('btn-ocr-insertar');
+
+    if (ocrModal.rows.length === 0) { box.style.display = 'none'; btnInsertar.style.display = 'none'; return; }
+
+    if (modo === 'ambos') {
+        table.innerHTML = '<thead><tr><th>Tienda</th><th>Artículo</th><th></th></tr></thead><tbody>' +
+            ocrModal.rows.map(r => `<tr>
+                <td>${r.tienda}</td>
+                <td>${r.articulo}</td>
+                <td>${r.seguro ? '✅' : '⚠️ revisar'}</td>
+            </tr>`).join('') + '</tbody>';
+    } else {
+        table.innerHTML = `<thead><tr><th>${modo === 'tiendas' ? 'Tienda' : 'Artículo'}</th></tr></thead><tbody>` +
+            ocrModal.rows.map(r => `<tr><td>${r.valor}</td></tr>`).join('') + '</tbody>';
+    }
+
+    box.style.display = 'block';
+    if (note) { noteEl.textContent = note; noteEl.style.display = 'block'; } else { noteEl.style.display = 'none'; }
+    btnInsertar.style.display = 'inline-block';
+}
+
+// Inserta lo revisado en el campo real (append, nunca borra lo que ya había)
+function insertarOcrModal() {
+    const targetEl = document.getElementById(ocrModal.targetId);
+    if (!targetEl || ocrModal.rows.length === 0) return;
+
+    const modo = document.querySelector('input[name="ocr_modo"]:checked')?.value || 'articulos';
+    let lines = [];
+
+    if (modo === 'ambos') {
+        lines = ocrModal.rows.map(r => `${r.tienda}\t${r.articulo}`);
+    } else {
+        lines = ocrModal.rows.map(r => r.valor);
+    }
+
+    const originalValue = targetEl.value;
+    targetEl.value = (originalValue ? originalValue + '\n' : '') + lines.join('\n');
+    targetEl.dispatchEvent(new Event('input'));
+    targetEl.dispatchEvent(new Event('focusout'));
+
+    UI.showNotification(`✅ Insertadas ${lines.length} fila(s) en el campo.`);
+    UI.closeModal('ocrModal');
+}
+
+// Disparador por botón (subir archivo manual / cámara en móvil) — SIEMPRE alimenta el modal, nunca el campo directo
 document.getElementById('ocr-upload-input').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
-    procesarImagenOCR(file, this.dataset.currentTarget);
+    setOcrModalImage(file);
     this.value = ''; // Resetear input para permitir subir la misma foto otra vez
 });
 
-// 2. DISPARADOR POR PORTAPAPELES (Pegar imagen con Ctrl+V)
+// Disparador por portapapeles (Ctrl+V) — solo actúa si el modal OCR está abierto,
+// para no interferir nunca con lo que el usuario esté escribiendo a mano en los campos.
 document.addEventListener('paste', function(e) {
-    // 1. Verificamos que el usuario esté pegando dentro de una caja de texto (textarea)
-    const targetEl = e.target;
-    if (targetEl.tagName !== 'TEXTAREA') return;
+    const modalEl = document.getElementById('ocrModal');
+    if (!modalEl || modalEl.style.display !== 'flex') return;
 
-    // 2. Buscamos si hay un archivo de imagen en el portapapeles
     const items = (e.clipboardData || window.clipboardData).items;
     let imageFile = null;
-
     for (let item of items) {
-        if (item.type.indexOf('image') === 0) {
-            imageFile = item.getAsFile();
-            break;
-        }
+        if (item.type.indexOf('image') === 0) { imageFile = item.getAsFile(); break; }
     }
-
-    // 3. Si hay una imagen, bloqueamos el pegado normal y lanzamos el OCR
     if (imageFile) {
-        e.preventDefault(); 
-        procesarImagenOCR(imageFile, targetEl.id);
+        e.preventDefault();
+        setOcrModalImage(imageFile);
     }
-    // Si no hay imagen (es texto normal que han copiado), la función termina y deja que se pegue el texto de forma natural.
 });
