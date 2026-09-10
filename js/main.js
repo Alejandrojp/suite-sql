@@ -878,6 +878,11 @@ document.addEventListener('click', (e) => {
     if (!btn) return;
 
     switch (btn.dataset.action) {
+        case 'triggerOCR': 
+            const ocrInput = document.getElementById('ocr-upload-input');
+            ocrInput.dataset.currentTarget = btn.dataset.target; 
+            ocrInput.click(); 
+            break;
         case 'abrirConversorTiendas': document.getElementById('inputNumsTienda').value = ''; UI.openModal('conversorModal'); document.getElementById('inputNumsTienda').focus(); break;
         case 'abrirEditorTiendas': abrirEditorTiendas(); break;
         case 'borrarHistorial': if (confirm("¿Borrar historial?")) { State.borrarHistorialLocal(); UI.cargarHistorialUI(); UI.showNotification("Historial borrado."); } break;
@@ -1150,5 +1155,66 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         const nextMap = { 'busq1': 'busq2', 'busq2': 'filter-mass', 'busq1_del': 'busq2_del', 'busq2_del': 'filter-delete', 'busq1_swap': 'busq2_swap', 'busq2_swap': 'filter-swap', 'busq1_repair': 'busq2_repair', 'busq2_repair': 'filter-repair' };
         if (nextMap[e.target.id]) { e.preventDefault(); document.getElementById(nextMap[e.target.id]).focus(); }
+    }
+});
+
+// ==========================================
+// 5. MOTOR OCR (TESSERACT.JS)
+// ==========================================
+document.getElementById('ocr-upload-input').addEventListener('change', async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const targetId = this.dataset.currentTarget;
+    const targetEl = document.getElementById(targetId);
+    
+    // Guardar estado visual previo
+    const originalPlaceholder = targetEl.placeholder;
+    const originalValue = targetEl.value;
+
+    // UX: Estado de carga
+    targetEl.value = '';
+    targetEl.placeholder = '⏳ Analizando imagen con IA (Tesseract OCR)...';
+    targetEl.disabled = true;
+    document.body.style.cursor = 'wait';
+
+    try {
+        // Ejecución de OCR en español e inglés para mayor precisión numérica
+        const result = await Tesseract.recognize(file, 'spa+eng');
+        const text = result.data.text;
+
+        // Extracción estricta de secuencias numéricas
+        const numbers = text.match(/\d+/g) || [];
+        
+        if (numbers.length > 0) {
+            // Combinar con lo que ya hubiera, separar por saltos de línea
+            const newValue = (originalValue ? originalValue + '\n' : '') + numbers.join('\n');
+            targetEl.value = newValue;
+            
+            // Forzar reactividad del ecosistema actual (autoguardado, limpieza de duplicados y contadores)
+            targetEl.dispatchEvent(new Event('input'));
+            targetEl.dispatchEvent(new Event('focusout'));
+            
+            if(window.UI && window.UI.showNotification) {
+                window.UI.showNotification(`✅ OCR: Extraídos ${numbers.length} números de la imagen.`);
+            }
+        } else {
+            targetEl.value = originalValue;
+            if(window.UI && window.UI.showNotification) {
+                window.UI.showNotification("⚠️ OCR: No se detectaron números claros en la imagen.");
+            }
+        }
+    } catch (error) {
+        console.error("Error en motor OCR:", error);
+        targetEl.value = originalValue;
+        if(window.UI && window.UI.showNotification) {
+            window.UI.showNotification("❌ Error crítico procesando la imagen.");
+        }
+    } finally {
+        // Restaurar estado visual
+        targetEl.placeholder = originalPlaceholder;
+        targetEl.disabled = false;
+        document.body.style.cursor = 'default';
+        this.value = ''; // Resetear input para permitir subir la misma foto otra vez
     }
 });
