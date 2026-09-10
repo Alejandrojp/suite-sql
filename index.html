@@ -1405,6 +1405,8 @@
                                     value="excel_tienda"> 🏪 Excel (Tiendas)</label>
                             <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_del"
                                     value="manual"> ✍️ Manual (1 Prov)</label>
+                            <label style="margin:0; cursor:pointer;"><input type="radio" name="modo_p_del"
+                                    value="manual_noprov"> ✍️ Manual (Todas las plantillas)</label>
                         </div>
                     </h3>
 
@@ -1468,6 +1470,16 @@
                             </div>
                         </div>
                     </div>
+
+                    <div id="wrap-manual-noprov-del" style="display:none; padding-top: 15px; border-top: 1px solid var(--border);">
+    <div class="input-group" style="margin-bottom:0;">
+        <label>Artículos a ELIMINAR de TODAS las plantillas de la tienda (IDs separados por intro o coma):</label>
+        <div class="input-wrapper">
+            <textarea id="noprov-articulos-del" placeholder="Ej:&#10;50493&#10;50494"></textarea>
+            <button class="clear-input-btn" data-action="clearInput" data-target="noprov-articulos-del">✖</button>
+        </div>
+    </div>
+</div>
                 </div>
 
                 <div class="input-group" id="wrap-stores-del" style="display:none;">
