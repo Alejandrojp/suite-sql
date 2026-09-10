@@ -1200,10 +1200,15 @@ let ocrWorkerPromise = null;
 
 function getOcrWorker() {
     if (!ocrWorkerPromise) {
-        // createWorker('spa+eng') carga idiomas e inicializa el motor una sola vez.
-        // A partir de aquí se reutiliza para todos los análisis de la sesión.
-        ocrWorkerPromise = Tesseract.createWorker('spa+eng').catch(err => {
-            ocrWorkerPromise = null; // si falla la creación, permite reintentar la próxima vez
+        // Inicialización compatible con Tesseract.js v4
+        ocrWorkerPromise = (async () => {
+            const worker = Tesseract.createWorker();
+            await worker.load();
+            await worker.loadLanguage('spa+eng');
+            await worker.initialize('spa+eng');
+            return worker;
+        })().catch(err => {
+            ocrWorkerPromise = null; // permite reintentar si falla la creación
             throw err;
         });
     }
