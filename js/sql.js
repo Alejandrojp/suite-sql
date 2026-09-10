@@ -821,7 +821,33 @@ export function generarDelExcelPlantillas() {
             let unionArticulos = listaArticulos.map((art, idx) => idx === 0 ? `SELECT '${sqlEscape(art)}' AS idArticulo` : ` UNION ALL SELECT '${sqlEscape(art)}'`).join('');
 
             auditSql = `SELECT \n    ListaTiendas.t_num AS 'Nº Tienda', \n    COALESCE(c.codigo, '---') AS Codigo_Plantilla, \n    COALESCE(c.nombre, 'NO HAY PLANTILLA ACTIVA') AS Nombre_Plantilla, \n    ListaArticulos.idArticulo AS Articulo, \n    COALESCE(MA.descripcion_principal, 'NO COPIADO EN EMPRESA') AS Descripcion, \n    ${caseEstadoDel}\nFROM (\n    ${unionTiendas}\n) ListaTiendas\nCROSS JOIN (\n    ${unionArticulos}\n) ListaArticulos\nLEFT JOIN cabplantilla c ON c.nombre LIKE ListaTiendas.c_nom AND c.situacion = 'A'\nLEFT JOIN detplantilla d ON c.codigo = d.codigo AND d.articulo = ListaArticulos.idArticulo\nLEFT JOIN maeart MA ON MA.codigo = ListaArticulos.idArticulo AND MA.empresa = ListaTiendas.e_cod\nORDER BY Estado ASC, ListaTiendas.t_num, c.nombre, ListaArticulos.idArticulo;`;
+        } else if (modo === 'manual_noprov') {
+            let listaArticulos = document.getElementById('noprov-articulos-del').value.split(/[\r\n,]+/).map(s => s.trim()).filter(s => s !== '').map(a => safeInt(a));
+            let listaTiendas = Array.from(document.querySelectorAll('#list-del .store-item input:checked')).map(cb => safeInt(cb.value));
 
+            if (listaArticulos.length === 0) return showNotification("⚠️ ¡Añade artículos a eliminar!");
+            if (listaTiendas.length === 0) return showNotification("⚠️ ¡Selecciona al menos una tienda!");
+
+            let orConds = listaTiendas.map(dbId => {
+                const sObj = state.tiendasData.find(t => t.id === dbId);
+                let tNum = sObj.name.split(' - ')[0].trim();
+                return `c.nombre LIKE '%(T${tNum})%'`;
+            }).join('\n        OR ');
+
+            let artsJoined = listaArticulos.map(a => `'${a}'`).join(', ');
+
+            sql = `DELETE d FROM detplantilla d\nINNER JOIN cabplantilla c ON d.codigo = c.codigo\nWHERE d.articulo IN (${artsJoined})\nAND c.situacion = 'A'\nAND (\n        ${orConds}\n);`;
+
+            let unionTiendas = listaTiendas.map((dbId, idx) => {
+                const sObj = state.tiendasData.find(t => t.id === dbId);
+                let tNum = sObj.name.split(' - ')[0].trim();
+                let c_nom = `%(T${tNum})%`;
+                return idx === 0 ? `SELECT '${dbId}' AS e_cod, '${tNum}' AS t_num, '${c_nom}' AS c_nom` : ` UNION ALL SELECT '${dbId}', '${tNum}', '${c_nom}'`;
+            }).join('');
+
+            let unionArticulos = listaArticulos.map((art, idx) => idx === 0 ? `SELECT '${sqlEscape(art)}' AS idArticulo` : ` UNION ALL SELECT '${sqlEscape(art)}'`).join('');
+
+            auditSql = `SELECT \n    ListaTiendas.t_num AS 'Nº Tienda', \n    COALESCE(c.codigo, '---') AS Codigo_Plantilla, \n    COALESCE(c.nombre, 'NO HAY PLANTILLA ACTIVA') AS Nombre_Plantilla, \n    ListaArticulos.idArticulo AS Articulo, \n    COALESCE(MA.descripcion_principal, 'NO COPIADO EN EMPRESA') AS Descripcion, \n    ${caseEstadoDel}\nFROM (\n    ${unionTiendas}\n) ListaTiendas\nCROSS JOIN (\n    ${unionArticulos}\n) ListaArticulos\nLEFT JOIN cabplantilla c ON c.nombre LIKE ListaTiendas.c_nom AND c.situacion = 'A'\nLEFT JOIN detplantilla d ON c.codigo = d.codigo AND d.articulo = ListaArticulos.idArticulo\nLEFT JOIN maeart MA ON MA.codigo = ListaArticulos.idArticulo AND MA.empresa = ListaTiendas.e_cod\nORDER BY Estado ASC, ListaTiendas.t_num, c.nombre, ListaArticulos.idArticulo;`;
         } else if (modo === 'excel_tienda') {
             let data = state.excel.p_del.data.filter(d => d.valid && !d.duplicate);
             if (data.length === 0) return showNotification("⚠️ Faltan datos en el Excel.");
@@ -1035,12 +1061,12 @@ export function descargarSQL(type) {
         let sel = (window.fullSqlCache && window.fullSqlCache['out-consulta']) || document.getElementById('out-consulta').textContent;
         let upd = (window.fullSqlCache && window.fullSqlCache['out-update']) || document.getElementById('out-update').textContent;
         content = sel + "\n\n" + upd;
-    } else if (type === 'p_traspaso') { 
+    } else if (type === 'p_traspaso') {
         let tras = (window.fullSqlCache && window.fullSqlCache['out-traspaso']) || document.getElementById('out-traspaso').textContent;
         let aud = (window.fullSqlCache && window.fullSqlCache['out-traspaso-audit']) || document.getElementById('out-traspaso-audit').textContent;
         content = tras + "\n\n" + aud;
     }
-    
+
 
     if (!content || content.trim() === "") { showNotification("⚠️ Genera las consultas primero."); return; }
 
@@ -1190,9 +1216,9 @@ export function generarTraspasoPlantillas() {
         let artsRaw = document.getElementById('tras-articulos').value.split(/[\r\n,]+/).map(s => s.trim()).filter(s => s !== '');
         let provOrigen = document.getElementById('tras-prov-origen').value.trim();
         let provDestino = document.getElementById('tras-prov-destino').value.trim();
-        
+
         if (artsRaw.length === 0) return showNotification("⚠️ Introduce al menos un artículo.");
-       if (!provOrigen || !provDestino) return showNotification("⚠️ Faltan los proveedores de origen y destino.");
+        if (!provOrigen || !provDestino) return showNotification("⚠️ Faltan los proveedores de origen y destino.");
 
         agregarHistorial(provOrigen);
         agregarHistorial(provDestino);
@@ -1236,7 +1262,7 @@ INNER JOIN cabplantilla c_origen ON
     SUBSTRING_INDEX(SUBSTRING_INDEX(c_destino.nombre, '(T', -1), ')', 1) = 
     SUBSTRING_INDEX(SUBSTRING_INDEX(c_origen.nombre, '(T', -1), ')', 1)
 INNER JOIN detplantilla d_origen ON d_origen.codigo = c_origen.codigo
-SET d_destino.stock_ideal = d_destino.stock_ideal + d_origen.stock_ideal
+SET d_destino.stock_ideal = COALESCE(d_destino.stock_ideal, 0) + COALESCE(d_origen.stock_ideal, 0)
 WHERE d_destino.articulo IN (${listaArticulos})
   AND d_origen.articulo IN (${listaArticulos})
   AND c_destino.nombre LIKE '%${safeDest}%'

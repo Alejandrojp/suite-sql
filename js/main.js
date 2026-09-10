@@ -48,6 +48,7 @@ function ejecutarGeneracionAsincrona(btn, taskFn) {
 // ==========================================
 function buildStateObj() {
     return {
+        noprovArtsDel: document.getElementById('noprov-articulos-del')?.value || '',
         modo_masivo: document.querySelector('input[name="modo_masivo"]:checked')?.value || 'simple',
         modo_borrar: document.querySelector('input[name="modo_borrar"]:checked')?.value || 'simple',
         modo_swap: document.querySelector('input[name="modo_swap"]:checked')?.value || 'simple',
@@ -138,6 +139,7 @@ function cargarEstadoFormulario() {
     const setCheck = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.checked = val; };
 
     // TPV
+    setVal('noprov-articulos-del', s.noprovArtsDel);
     setVal('articulos', s.articulos); setVal('articulos_excel', s.articulos_excel);
     setVal('articulos_borrar', s.articulos_borrar); setVal('articulos_excel_del', s.articulos_excel_del);
     setVal('articulos_excel_swap', s.articulos_excel_swap);
@@ -300,6 +302,7 @@ function toggleModoPDel() {
     let modo = document.querySelector('input[name="modo_p_del"]:checked')?.value || 'excel_cod';
     let wrapExcel = document.getElementById('wrap-excel-del');
     let wrapManual = document.getElementById('wrap-manual-del');
+    let wrapManualNoProv = document.getElementById('wrap-manual-noprov-del');
     let wrapStores = document.getElementById('wrap-stores-del');
 
     let label = document.getElementById('label-paste-del');
@@ -307,19 +310,21 @@ function toggleModoPDel() {
     let thead = document.getElementById('thead-p_del');
 
     if (modo === 'excel_tienda') {
-        wrapExcel.style.display = 'block'; wrapManual.style.display = 'none'; wrapStores.style.display = 'none';
+        wrapExcel.style.display = 'block'; wrapManual.style.display = 'none'; wrapManualNoProv.style.display = 'none'; wrapStores.style.display = 'none';
         label.innerText = "Pegar celdas de Excel (nº tienda, articulo, proveedor):";
         textarea.placeholder = "tienda\tarticulo\tproveedor\n71\t48727\tFrio";
         thead.innerHTML = "<tr><th>Nº Tienda</th><th>ID Artículo</th><th>Proveedor</th></tr>";
         procesarExcel('p_del');
     } else if (modo === 'excel_cod') {
-        wrapExcel.style.display = 'block'; wrapManual.style.display = 'none'; wrapStores.style.display = 'none';
+        wrapExcel.style.display = 'block'; wrapManual.style.display = 'none'; wrapManualNoProv.style.display = 'none'; wrapStores.style.display = 'none';
         label.innerText = "Pegar celdas de Excel (codigo plantilla, articulo):";
         textarea.placeholder = "codigo\tarticulo\n1475\t48727";
         thead.innerHTML = "<tr><th>Cód Plantilla</th><th>ID Artículo</th></tr>";
         procesarExcel('p_del');
     } else if (modo === 'manual') {
-        wrapExcel.style.display = 'none'; wrapManual.style.display = 'block'; wrapStores.style.display = 'block';
+        wrapExcel.style.display = 'none'; wrapManual.style.display = 'block'; wrapManualNoProv.style.display = 'none'; wrapStores.style.display = 'block';
+    } else if (modo === 'manual_noprov') {
+        wrapExcel.style.display = 'none'; wrapManual.style.display = 'none'; wrapManualNoProv.style.display = 'block'; wrapStores.style.display = 'block';
     }
     guardarEstadoGlobal();
 }
