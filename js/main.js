@@ -504,10 +504,19 @@ function limpiarInputArticulos(id, badgeId) {
     let textarea = document.getElementById(id);
     if (!textarea) return;
     let raw = textarea.value;
-    let cleanArray = raw.split(/[\r\n]+/).map(line => { let match = line.match(/^\s*(\d+)/); return match ? match[1] : ''; }).filter(s => s !== '');
+    
+    let cleanArray = raw.split(/[\r\n,\t\s]+/)
+                        .map(s => s.replace(/\D/g, '')) // Extrae estrictamente solo los números
+                        .filter(s => s !== '');         // Filtra los bloques vacíos
+                        
     let uniqueArray = [...new Set(cleanArray)];
-    if (cleanArray.length !== uniqueArray.length) UI.showNotification(`⚠️ Se eliminaron ${cleanArray.length - uniqueArray.length} duplicados.`);
+    
+    if (cleanArray.length !== uniqueArray.length) {
+        UI.showNotification(`⚠️ Se eliminaron ${cleanArray.length - uniqueArray.length} duplicados.`);
+    }
+    
     let cleanText = uniqueArray.join('\n');
+    
     if (raw !== cleanText) {
         textarea.value = cleanText;
         UI.actualizarContadorArticulosGenerico(id, badgeId);
