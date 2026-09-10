@@ -410,3 +410,12 @@ body.dark label:has(input[name="posicion_insercion"]):hover {
 #conflictModal {
     z-index: 2040 !important;
 }
+
+/* --- ANIMACIÓN BOTÓN SWAP PROVEEDORES --- */
+button[data-action="swapProveedores"] {
+    transition: transform 0.3s ease-in-out, background-color 0.2s;
+}
+button[data-action="swapProveedores"]:active {
+    transform: rotate(180deg) scale(0.9);
+    background-color: #732d91 !important;
+}

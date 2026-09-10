@@ -14,6 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style/dist/xlsx.bundle.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 
     <link href="styles.css" rel="stylesheet" />
 </head>
@@ -21,6 +22,7 @@
 <body>
 
     <div id="notification-area"></div>
+    <input type="file" id="ocr-upload-input" accept="image/*" style="display: none;">
     <button id="btn-theme-toggle" class="theme-toggle" title="Modo Oscuro/Claro">🌓</button>
     <button id="floating-scroll-btn" title="Ir arriba/abajo">⬇️</button>
 
@@ -112,6 +114,10 @@
             <div class="input-group">
                 <p style="font-size:0.9em; color:#666; margin-bottom:5px;">Pega tu lista de tiendas. El sistema extraerá
                     los números automáticamente de cualquier texto.</p>
+                <div style="text-align: right; margin-bottom: 5px;">
+                    <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;" data-action="triggerOCR"
+                        data-target="inputNumsTienda">📷 Escanear Foto</button>
+                </div>
                 <textarea id="inputNumsTienda" class="paste-area"
                     placeholder="Pega texto, números o lista aquí..."></textarea>
             </div>
@@ -156,6 +162,10 @@
             </div>
             <p style="font-size:0.9em; color:#666;">Pega cualquier texto que contenga los IDs o Nº de Tienda. El sistema
                 extraerá los números de forma automática.</p>
+            <div style="text-align: right; margin-bottom: 5px;">
+                <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;" data-action="triggerOCR"
+                    data-target="pasteInput">📷 Escanear Foto</button>
+            </div>
             <textarea id="pasteInput" class="paste-area"></textarea>
             <div class="editor-actions" style="justify-content: flex-end;">
                 <button class="btn-secondary" data-action="closeModal" data-modal="pasteModal">Cancelar</button>
@@ -218,6 +228,10 @@
                     </h3>
 
                     <div id="wrap-modo-simple-mass" class="input-wrapper">
+                        <div style="text-align: right; margin-bottom: 5px;">
+                            <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;"
+                                data-action="triggerOCR" data-target="articulos">📷 Escanear Foto</button>
+                        </div>
                         <textarea id="articulos" placeholder="Ej:&#10;50493&#10;50494"></textarea>
                         <button class="clear-input-btn" data-action="clearInput" data-target="articulos"
                             title="Borrar todo">✖</button>
@@ -468,6 +482,10 @@
                     </h3>
 
                     <div id="wrap-modo-simple-del" class="input-wrapper">
+                        <div style="text-align: right; margin-bottom: 5px;">
+                            <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;"
+                                data-action="triggerOCR" data-target="articulos_borrar">📷 Escanear Foto</button>
+                        </div>
                         <textarea id="articulos_borrar" placeholder="Ej:&#10;50493&#10;50494"></textarea>
                         <button class="clear-input-btn" data-action="clearInput" data-target="articulos_borrar"
                             title="Borrar todo">✖</button>
@@ -1615,6 +1633,10 @@
                 <div class="input-group">
                     <label>Códigos de Plantilla (Ej: 1475, 3639):</label>
                     <div class="input-wrapper">
+                        <div style="text-align: right; margin-bottom: 5px;">
+                            <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;"
+                                data-action="triggerOCR" data-target="input-empty">📷 Escanear Foto</button>
+                        </div>
                         <textarea id="input-empty" placeholder="1475, 3639..."></textarea>
                         <button class="clear-input-btn" data-action="clearInput" data-target="input-empty">✖</button>
                     </div>
@@ -1687,6 +1709,10 @@
                 <div class="input-group">
                     <label>IDs de Clientes (separados por comas o saltos de línea):</label>
                     <div class="input-wrapper">
+                        <div style="text-align: right; margin-bottom: 5px;">
+                            <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;"
+                                data-action="triggerOCR" data-target="cons-clientes">📷 Escanear Foto</button>
+                        </div>
                         <textarea id="cons-clientes" placeholder="Ej:&#10;2472&#10;51195&#10;3234"></textarea>
                         <button class="clear-input-btn" data-action="clearInput" data-target="cons-clientes">✖</button>
                     </div>
@@ -1853,6 +1879,10 @@
                             artículos</span>
                     </label>
                     <div class="input-wrapper">
+                        <div style="text-align: right; margin-bottom: 5px;">
+                            <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;"
+                                data-action="triggerOCR" data-target="tras-articulos">📷 Escanear Foto</button>
+                        </div>
                         <textarea id="tras-articulos" placeholder="Ej:&#10;50918&#10;50919"></textarea>
                         <button class="clear-input-btn" data-action="clearInput" data-target="tras-articulos">✖</button>
                     </div>
@@ -1965,6 +1995,10 @@
                             artículos</span>
                     </h3>
                     <p style="font-size:0.85em; color:#666; margin-top:0;">Pégalos en lista (uno por línea).</p>
+                    <div style="text-align: right; margin-bottom: 5px;">
+                        <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;"
+                            data-action="triggerOCR" data-target="api_articulos">📷 Escanear Foto</button>
+                    </div>
                     <textarea id="api_articulos" placeholder="Ej:&#10;50253&#10;50254"
                         style="width: 100%; height: 280px; border: 1px solid var(--theme-green); border-radius: 6px; padding: 10px; resize: none;"></textarea>
                 </div>
