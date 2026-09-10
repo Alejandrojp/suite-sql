@@ -710,8 +710,8 @@ function abrirEditorTiendas() {
 
 function addStoreEditorRow(id = '', name = '') {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><input type="text" value="${id}" placeholder="Ej: 6603" class="editor-input"></td>
-        <td><input type="text" value="${name}" placeholder="Ej: 71 - CALLE DEL MAR"></td>
+    tr.innerHTML = `<td><input type="text" value="${UI.escapeHTML(id)}" placeholder="Ej: 6603" class="editor-input"></td>
+        <td><input type="text" value="${UI.escapeHTML(name)}" placeholder="Ej: 71 - CALLE DEL MAR"></td>
         <td><button class="btn-remove-row" data-action="removeClosestTr" style="margin:0 auto;">X</button></td>`;
     document.getElementById('storeEditorRows').appendChild(tr);
 }
@@ -758,8 +758,8 @@ function guardarTiendasEditadas() {
 
 function addSwapRow(oldVal = '', newVal = '') {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><input type="text" placeholder="ID Viejo" value="${oldVal}" class="swap-input"></td>
-        <td><input type="text" placeholder="ID Nuevo" value="${newVal}" class="swap-input"></td>
+    tr.innerHTML = `<td><input type="text" placeholder="ID Viejo" value="${UI.escapeHTML(oldVal)}" class="swap-input"></td>
+        <td><input type="text" placeholder="ID Nuevo" value="${UI.escapeHTML(newVal)}" class="swap-input"></td>
         <td><button class="btn-remove-row" data-action="removeSwapRow">X</button></td>`;
     document.getElementById('swap-rows').appendChild(tr);
     actualizarBadgeSwap();

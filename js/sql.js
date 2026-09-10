@@ -486,7 +486,7 @@ export function generarSQLSwap() {
     INNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa
     INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa
     INNER JOIN (${unionPairs}) Cambios ON D.idArticulo = Cambios.idViejo
-    INNER JOIN fo_desglose ExisteNuevo ON ExisteNuevo.idRestaurante = D.idRestaurante AND ExisteNuevo.idEmpresa = D.idGrupo AND ExisteNuevo.idGrupo = D.idGrupo AND ExisteNuevo.idArticulo = Cambios.idNuevo
+    INNER JOIN fo_desglose ExisteNuevo ON ExisteNuevo.idRestaurante = D.idRestaurante AND ExisteNuevo.idEmpresa = D.idEmpresa AND ExisteNuevo.idGrupo = D.idGrupo AND ExisteNuevo.idArticulo = Cambios.idNuevo
     WHERE R.codigo IN (${strTiendas})
     AND ${campoSQL} ${compareOp} '${b1}' ${busq2 ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''};
 
