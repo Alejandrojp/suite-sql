@@ -1157,16 +1157,14 @@ document.addEventListener('keydown', (e) => {
         if (nextMap[e.target.id]) { e.preventDefault(); document.getElementById(nextMap[e.target.id]).focus(); }
     }
 });
-
 // ==========================================
 // 5. MOTOR OCR (TESSERACT.JS)
 // ==========================================
-document.getElementById('ocr-upload-input').addEventListener('change', async function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
 
-    const targetId = this.dataset.currentTarget;
+// FUNCIÓN CENTRAL DE PROCESAMIENTO OCR
+async function procesarImagenOCR(imageFile, targetId) {
     const targetEl = document.getElementById(targetId);
+    if (!targetEl) return;
     
     // Guardar estado visual previo
     const originalPlaceholder = targetEl.placeholder;
@@ -1180,7 +1178,7 @@ document.getElementById('ocr-upload-input').addEventListener('change', async fun
 
     try {
         // Ejecución de OCR en español e inglés para mayor precisión numérica
-        const result = await Tesseract.recognize(file, 'spa+eng');
+        const result = await Tesseract.recognize(imageFile, 'spa+eng');
         const text = result.data.text;
 
         // Extracción estricta de secuencias numéricas
@@ -1215,6 +1213,39 @@ document.getElementById('ocr-upload-input').addEventListener('change', async fun
         targetEl.placeholder = originalPlaceholder;
         targetEl.disabled = false;
         document.body.style.cursor = 'default';
-        this.value = ''; // Resetear input para permitir subir la misma foto otra vez
+        targetEl.focus(); // Devolver el foco al usuario
     }
+}
+
+// 1. DISPARADOR POR BOTÓN (Subir archivo manual / Cámara en móvil)
+document.getElementById('ocr-upload-input').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    procesarImagenOCR(file, this.dataset.currentTarget);
+    this.value = ''; // Resetear input para permitir subir la misma foto otra vez
+});
+
+// 2. DISPARADOR POR PORTAPAPELES (Pegar imagen con Ctrl+V)
+document.addEventListener('paste', function(e) {
+    // 1. Verificamos que el usuario esté pegando dentro de una caja de texto (textarea)
+    const targetEl = e.target;
+    if (targetEl.tagName !== 'TEXTAREA') return;
+
+    // 2. Buscamos si hay un archivo de imagen en el portapapeles
+    const items = (e.clipboardData || window.clipboardData).items;
+    let imageFile = null;
+
+    for (let item of items) {
+        if (item.type.indexOf('image') === 0) {
+            imageFile = item.getAsFile();
+            break;
+        }
+    }
+
+    // 3. Si hay una imagen, bloqueamos el pegado normal y lanzamos el OCR
+    if (imageFile) {
+        e.preventDefault(); 
+        procesarImagenOCR(imageFile, targetEl.id);
+    }
+    // Si no hay imagen (es texto normal que han copiado), la función termina y deja que se pegue el texto de forma natural.
 });
