@@ -1276,6 +1276,10 @@
                                     artículos</span>
                             </label>
                             <div class="input-wrapper">
+                                <div style="text-align: right; margin-bottom: 5px;">
+                                    <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;"
+                                        data-action="triggerOCR" data-target="prov-articulos">📷 Escanear Foto</button>
+                                </div>
                                 <textarea id="prov-articulos" placeholder="Ej:&#10;50493&#10;50494"></textarea>
                                 <button class="clear-input-btn" data-action="clearInput"
                                     data-target="prov-articulos">✖</button>
@@ -1467,10 +1471,16 @@
 
                         <div class="input-group" style="margin-bottom:0;">
                             <label style="display:flex; justify-content:space-between; align-items:center;">
-    Artículos a ELIMINAR (IDs separados por intro o coma):
-    <span id="art-count-p-del" class="count-badge art-badge" style="background:#6c757d;">0 artículos</span>
-</label>
+                                Artículos a ELIMINAR (IDs separados por intro o coma):
+                                <span id="art-count-p-del" class="count-badge art-badge" style="background:#6c757d;">0
+                                    artículos</span>
+                            </label>
                             <div class="input-wrapper">
+                                <div style="text-align: right; margin-bottom: 5px;">
+                                    <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;"
+                                        data-action="triggerOCR" data-target="prov-articulos-del">📷 Escanear
+                                        Foto</button>
+                                </div>
                                 <textarea id="prov-articulos-del" placeholder="Ej:&#10;50493&#10;50494"></textarea>
                                 <button class="clear-input-btn" data-action="clearInput"
                                     data-target="prov-articulos-del">✖</button>
@@ -1482,10 +1492,16 @@
                         style="display:none; padding-top: 15px; border-top: 1px solid var(--border);">
                         <div class="input-group" style="margin-bottom:0;">
                             <label style="display:flex; justify-content:space-between; align-items:center;">
-    Artículos a ELIMINAR de TODAS las plantillas (IDs separados por intro o coma):
-    <span id="art-count-p-noprov-del" class="count-badge art-badge" style="background:#6c757d;">0 artículos</span>
-</label>
+                                Artículos a ELIMINAR de TODAS las plantillas (IDs separados por intro o coma):
+                                <span id="art-count-p-noprov-del" class="count-badge art-badge"
+                                    style="background:#6c757d;">0 artículos</span>
+                            </label>
                             <div class="input-wrapper">
+                                <div style="text-align: right; margin-bottom: 5px;">
+                                    <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;"
+                                        data-action="triggerOCR" data-target="noprov-articulos-del">📷 Escanear
+                                        Foto</button>
+                                </div>
                                 <textarea id="noprov-articulos-del" placeholder="Ej:&#10;50493&#10;50494"></textarea>
                                 <button class="clear-input-btn" data-action="clearInput"
                                     data-target="noprov-articulos-del">✖</button>
@@ -1943,9 +1959,11 @@
             <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                 <div style="flex: 1; min-width: 250px;">
                     <h3 class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-    <span>1. Artículos a Copiar</span>
-    <span id="art-count-api-arts" class="count-badge art-badge" style="background:#6c757d; font-size:12px; font-weight:normal; padding:4px 8px;">0 artículos</span>
-</h3>
+                        <span>1. Artículos a Copiar</span>
+                        <span id="art-count-api-arts" class="count-badge art-badge"
+                            style="background:#6c757d; font-size:12px; font-weight:normal; padding:4px 8px;">0
+                            artículos</span>
+                    </h3>
                     <p style="font-size:0.85em; color:#666; margin-top:0;">Pégalos en lista (uno por línea).</p>
                     <textarea id="api_articulos" placeholder="Ej:&#10;50253&#10;50254"
                         style="width: 100%; height: 280px; border: 1px solid var(--theme-green); border-radius: 6px; padding: 10px; resize: none;"></textarea>
