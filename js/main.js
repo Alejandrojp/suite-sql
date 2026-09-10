@@ -500,8 +500,9 @@ function actualizarTextareaExcel(tab, validData) {
     UI.showNotification(`🧹 Lista optimizada correctamente (Purgadas ${borradas} filas conflictivas/erróneas)`);
 }
 
-function limpiarInputArticulos(id) {
+function limpiarInputArticulos(id, badgeId) {
     let textarea = document.getElementById(id);
+    if (!textarea) return;
     let raw = textarea.value;
     let cleanArray = raw.split(/[\r\n]+/).map(line => { let match = line.match(/^\s*(\d+)/); return match ? match[1] : ''; }).filter(s => s !== '');
     let uniqueArray = [...new Set(cleanArray)];
@@ -509,7 +510,7 @@ function limpiarInputArticulos(id) {
     let cleanText = uniqueArray.join('\n');
     if (raw !== cleanText) {
         textarea.value = cleanText;
-        UI.actualizarContadorArticulosGenerico(id, (id === 'articulos') ? 'art-count-mass' : 'art-count-del');
+        UI.actualizarContadorArticulosGenerico(id, badgeId);
         guardarEstadoGlobal();
     }
 }
@@ -818,6 +819,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.querySelector('input[name="modo_p_del"]:checked')) toggleModoPDel();
 
     UI.actualizarContadorArticulosGenerico('articulos_borrar', 'art-count-del');
+    UI.actualizarContadorArticulosGenerico('prov-articulos', 'art-count-p-add');
+    UI.actualizarContadorArticulosGenerico('prov-articulos-del', 'art-count-p-del');
+    UI.actualizarContadorArticulosGenerico('noprov-articulos-del', 'art-count-p-noprov-del');
+    UI.actualizarContadorArticulosGenerico('tras-articulos', 'art-count-traspaso');
+    UI.actualizarContadorArticulosGenerico('api_articulos', 'art-count-api-arts');
 
     window.addEventListener('scroll', UI.handleFloatingScrollButton);
     UI.handleFloatingScrollButton();
@@ -960,6 +966,10 @@ document.addEventListener('input', (e) => {
     if (id === 'articulos') { UI.actualizarContadorArticulosGenerico('articulos', 'art-count-mass'); }
     if (id === 'articulos_borrar') { UI.actualizarContadorArticulosGenerico('articulos_borrar', 'art-count-del'); }
     if (id === 'tras-articulos') { UI.actualizarContadorArticulosGenerico('tras-articulos', 'art-count-traspaso'); }
+    if (id === 'prov-articulos') { UI.actualizarContadorArticulosGenerico('prov-articulos', 'art-count-p-add'); }
+    if (id === 'prov-articulos-del') { UI.actualizarContadorArticulosGenerico('prov-articulos-del', 'art-count-p-del'); }
+    if (id === 'noprov-articulos-del') { UI.actualizarContadorArticulosGenerico('noprov-articulos-del', 'art-count-p-noprov-del'); }
+    if (id === 'api_articulos') { UI.actualizarContadorArticulosGenerico('api_articulos', 'art-count-api-arts'); }
 
     if (id === 'articulos_excel') { procesarExcel('mass'); guardarEstadoGlobal(); }
     if (id === 'articulos_excel_del') { procesarExcel('del'); guardarEstadoGlobal(); }
@@ -1045,9 +1055,13 @@ document.addEventListener('keyup', (e) => {
     }, 250);
 });
 document.addEventListener('focusout', (e) => {
-    if (e.target.id === 'articulos') limpiarInputArticulos('articulos');
-    if (e.target.id === 'articulos_borrar') limpiarInputArticulos('articulos_borrar');
-    if (e.target.id === 'tras-articulos') limpiarInputArticulos('tras-articulos');
+    if (e.target.id === 'articulos') limpiarInputArticulos('articulos', 'art-count-mass');
+    if (e.target.id === 'articulos_borrar') limpiarInputArticulos('articulos_borrar', 'art-count-del');
+    if (e.target.id === 'tras-articulos') limpiarInputArticulos('tras-articulos', 'art-count-traspaso');
+    if (e.target.id === 'prov-articulos') limpiarInputArticulos('prov-articulos', 'art-count-p-add');
+    if (e.target.id === 'prov-articulos-del') limpiarInputArticulos('prov-articulos-del', 'art-count-p-del');
+    if (e.target.id === 'noprov-articulos-del') limpiarInputArticulos('noprov-articulos-del', 'art-count-p-noprov-del');
+    if (e.target.id === 'api_articulos') limpiarInputArticulos('api_articulos', 'art-count-api-arts');
 });
 
 document.getElementById('importFile').addEventListener('change', function () {
