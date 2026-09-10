@@ -842,9 +842,15 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('scroll', UI.handleFloatingScrollButton);
     UI.handleFloatingScrollButton();
 
-    // Sincronización cruzada entre pestañas del navegador
+    // Sincronización cruzada entre pestañas del navegador.
+    // OJO: si el usuario está escribiendo en un campo de ESTA pestaña justo cuando
+    // OTRA pestaña autoguarda, no debemos pisar lo que está tecleando ahora mismo.
     window.addEventListener('storage', (e) => {
         if (e.key === 'sqlGenState') {
+            const activo = document.activeElement ? document.activeElement.tagName : '';
+            if (activo === 'TEXTAREA' || activo === 'INPUT') {
+                return; // Hay foco en un campo de texto: no recargamos el formulario encima
+            }
             cargarEstadoFormulario();
         }
     });
