@@ -23,15 +23,42 @@
 
     <div id="notification-area"></div>
     <input type="file" id="ocr-upload-input" accept="image/*" style="display: none;">
-    <button id="btn-theme-toggle" class="theme-toggle" title="Modo Oscuro/Claro">🌓</button>
     <button id="floating-scroll-btn" title="Ir arriba/abajo">⬇️</button>
 
-    <div class="app-switcher">
-        <button id="btn-nav-tpvs" class="nav-app-btn active" onclick="switchApp('tpvs')">🖥️ GESTIÓN TPVs</button>
-        <button id="btn-nav-plantillas" class="nav-app-btn" onclick="switchApp('plantillas')">📄 GESTIÓN
-            PLANTILLAS</button>
-    </div>
+    <div class="app-shell" id="app-shell">
+        <aside class="sidebar" id="app-sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-mark">🍖</div>
+                <div class="brand-text">
+                    <span class="brand-title">Suite SQL</span>
+                    <span class="brand-subtitle">Enrique Tomás</span>
+                </div>
+            </div>
 
+            <nav class="sidebar-nav">
+                <div class="sidebar-nav-label">Aplicaciones</div>
+                <button id="btn-nav-tpvs" class="nav-app-btn active" onclick="switchApp('tpvs')">
+                    <span class="nav-icon">🖥️</span><span class="nav-label">Gestión TPVs</span>
+                </button>
+                <button id="btn-nav-plantillas" class="nav-app-btn" onclick="switchApp('plantillas')">
+                    <span class="nav-icon">📄</span><span class="nav-label">Gestión Plantillas</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button id="btn-sidebar-collapse" class="sidebar-collapse-btn" title="Contraer/Expandir menú">«</button>
+                <button id="btn-theme-toggle" class="theme-toggle" title="Modo Oscuro/Claro">🌓</button>
+            </div>
+        </aside>
+
+        <div class="app-main">
+            <header class="topbar">
+                <button id="btn-sidebar-toggle-mobile" class="sidebar-toggle-mobile" title="Abrir menú">☰</button>
+                <div class="topbar-title" id="topbar-title">🖥️ Gestión TPVs</div>
+                <div class="topbar-spacer"></div>
+            </header>
+
+            <div class="content-scroll">
     <div id="conflictModal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
@@ -2102,6 +2129,10 @@
     </div>
     <datalist id="group-history"></datalist>
 
+    </div>
+        </div>
+    </div>
+
     <script>
         function switchApp(appId) {
             document.querySelectorAll('.app-section').forEach(el => el.classList.remove('active'));
@@ -2109,13 +2140,36 @@
             document.getElementById('app-' + appId).classList.add('active');
             document.getElementById('btn-nav-' + appId).classList.add('active');
             localStorage.setItem('sqlGenActiveApp', appId);
-            if (appId === 'tpvs') document.title = '🖥️ TPVs - Suite SQL';
-            else document.title = '📄 Plantillas - Suite SQL';
+
+            const topbarTitle = document.getElementById('topbar-title');
+            if (appId === 'tpvs') {
+                document.title = '🖥️ TPVs - Suite SQL';
+                if (topbarTitle) topbarTitle.textContent = '🖥️ Gestión TPVs';
+            } else {
+                document.title = '📄 Plantillas - Suite SQL';
+                if (topbarTitle) topbarTitle.textContent = '📄 Gestión Plantillas';
+            }
+
+            // En móvil, al elegir una app se cierra el sidebar para dejar sitio al contenido
+            document.getElementById('app-shell')?.classList.remove('sidebar-mobile-open');
         }
 
         window.addEventListener('DOMContentLoaded', () => {
             const savedApp = localStorage.getItem('sqlGenActiveApp') || 'tpvs';
             switchApp(savedApp);
+
+            // Sidebar: contraer/expandir (persistente) y menú móvil
+            const shell = document.getElementById('app-shell');
+            if (localStorage.getItem('sqlGenSidebarCollapsed') === '1') shell?.classList.add('sidebar-collapsed');
+
+            document.getElementById('btn-sidebar-collapse')?.addEventListener('click', () => {
+                shell.classList.toggle('sidebar-collapsed');
+                localStorage.setItem('sqlGenSidebarCollapsed', shell.classList.contains('sidebar-collapsed') ? '1' : '0');
+            });
+
+            document.getElementById('btn-sidebar-toggle-mobile')?.addEventListener('click', () => {
+                shell.classList.toggle('sidebar-mobile-open');
+            });
         });
 
         // Copiado desde Caché para textos largos
