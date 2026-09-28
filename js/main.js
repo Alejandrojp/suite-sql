@@ -917,7 +917,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Cargar base de conocimiento (asíncrono, no bloquea la UI)
     UI.showNotification("🧠 Cargando base de conocimiento...");
-    await Inteligencia.cargarBase();
+    await Promise.all([Inteligencia.cargarBase(), Inteligencia.cargarGrupos()]);
+    // Rellenar el datalist de grupos cuanto antes
+    if (Inteligencia.contarBase() === 0) {
+        UI.showNotification("⚠️ Base IA no disponible. Revisa js/inteligencia-base.json");
+    }
+    const dlInit = document.getElementById('grupos-datalist');
+    if (dlInit && dlInit.children.length === 0) {
+        Inteligencia.listarGrupos().forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.label = g.nombre;
+            dlInit.appendChild(opt);
+        });
+    }
+    console.log(`📚 Grupos cargados: ${Inteligencia.listarGrupos().length}`);
     console.log(`🧠 Base IA cargada: ${Inteligencia.contarBase()} artículos · ${Inteligencia.contarUsuario()} aprendidos por ti`);
 
     State.cargarTiendas(defaultTiendasData);
@@ -1016,8 +1030,7 @@ function renderIaManagerList() {
         div.innerHTML = `
             <div style="flex:1; min-width:0;">
                 <span class="group-name">#${it.codigo}</span>
-                <span class="group-count">→ grupo ${it.grupo}</span>
-                <span style="margin-left:8px; font-size:11px; ${esBase ? 'color:#6c757d;' : 'color:#16a34a;'}">${esBase ? '📚 común' : '🌱 tuyo'}</span>
+                <span class="group-count">→ ${UI.escapeHTML(Inteligencia.nombreGrupo(it.grupo))} <small style="color:var(--text-muted);">(${it.grupo})</small></span>                <span style="margin-left:8px; font-size:11px; ${esBase ? 'color:#6c757d;' : 'color:#16a34a;'}">${esBase ? '📚 común' : '🌱 tuyo'}</span>
                 <div style="font-size:11.5px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${UI.escapeHTML(it.nombre || '')}</div>
             </div>
             <input type="number" value="${it.grupo}" data-ia-cod="${it.codigo}" class="editor-input" style="width:70px; margin-right:8px;">
@@ -1194,7 +1207,7 @@ document.addEventListener('click', (e) => {
             break;
         }
 
-                case 'borrarTodaIA': {
+        case 'borrarTodaIA': {
             if (!confirm("⚠️ ¿Borrar TODA la base de datos de aprendizaje IA?\nEsto no se puede deshacer.")) break;
             Inteligencia.borrarTodaLaBBDD();
             UI.showNotification("🧹 Base de datos IA vaciada.");
@@ -1281,8 +1294,6 @@ document.addEventListener('click', (e) => {
         case 'addSwapRow': addSwapRow(); break;
         case 'removeSwapRow': btn.closest('tr').remove(); guardarEstadoGlobal(); actualizarBadgeSwap(); break;
         case 'abrirApiExcel': document.getElementById('apiExcelModal').style.display = 'flex'; break;
-            UI.crearListaTiendas('list-api', 'store-count-api', () => guardarEstadoGlobal());
-            break;
         case 'generarApiExcel': ejecutarGeneracionAsincrona(btn, () => SQL.generarApiExcel()); break;
 
         // --- GENERADORES ASÍNCRONOS ---
@@ -1341,13 +1352,19 @@ document.addEventListener('input', (e) => {
     if (id === 'noprov-articulos-del') { UI.actualizarContadorArticulosGenerico('noprov-articulos-del', 'art-count-p-noprov-del'); }
     if (id === 'api_articulos') { UI.actualizarContadorArticulosGenerico('api_articulos', 'art-count-api-arts'); }
 
-    if (id === 'articulos_excel') { procesarExcel('mass'); guardarEstadoGlobal(); }
-    if (id === 'articulos_excel_del') { procesarExcel('del'); guardarEstadoGlobal(); }
-    if (id === 'articulos_excel_swap') { procesarExcel('swap'); guardarEstadoGlobal(); }
+    // Debounce específico para el parseo de Excel (evita bloquear al pegar listas grandes)
+    const procesarExcelDebounced = debounce((tab) => {
+        procesarExcel(tab);
+        guardarEstadoGlobal();
+    }, 250);
 
-    if (id === 'paste-add') { procesarExcel('p_add'); guardarEstadoGlobal(); }
-    if (id === 'paste-del') { procesarExcel('p_del'); guardarEstadoGlobal(); }
-    if (id === 'paste-upd') { procesarExcel('p_upd'); guardarEstadoGlobal(); }
+    if (id === 'articulos_excel') procesarExcelDebounced('mass');
+    if (id === 'articulos_excel_del') procesarExcelDebounced('del');
+    if (id === 'articulos_excel_swap') procesarExcelDebounced('swap');
+
+    if (id === 'paste-add') procesarExcelDebounced('p_add');
+    if (id === 'paste-del') procesarExcelDebounced('p_del');
+    if (id === 'paste-upd') procesarExcelDebounced('p_upd');
 
     if (id === 'articulos_swap') { actualizarBadgeSwap(); }
     if (e.target.classList && e.target.classList.contains('editor-input')) { e.target.style.borderColor = ''; e.target.style.backgroundColor = ''; }
@@ -1472,8 +1489,9 @@ document.getElementById('importFile').addEventListener('change', function () {
 
 // EVENTOS DE VENTANA GLOBALES
 window.addEventListener('beforeunload', function (e) {
-    const hayResultados = Array.from(document.querySelectorAll('.output-section')).some(el => el.style.display === 'block');
-    if (hayResultados) { e.preventDefault(); e.returnValue = ''; }
+    const hayInput = ['articulos', 'articulos_borrar', 'articulos_excel', 'paste-add', 'paste-del']
+        .some(id => { const el = document.getElementById(id); return el && el.value.trim() !== ''; });
+    if (hayInput) { e.preventDefault(); e.returnValue = ''; }
 });
 window.addEventListener('error', (event) => {
     console.error("System Error:", event.error);
@@ -1507,6 +1525,13 @@ document.addEventListener('keydown', (e) => {
         const btnCopiar = Array.from(document.querySelectorAll('.app-section.active .tab-content.active .btn-secondary')).find(b => b.innerText.includes('Copiar Todo'));
         if (btnCopiar) btnCopiar.click();
         return;
+    }
+    
+    if (e.ctrlKey && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault();
+    renderIaManagerList();
+    UI.openModal('iaManagerModal');
+    return;
     }
 
     if (e.key === 'Escape') { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); }
@@ -1902,3 +1927,4 @@ document.addEventListener('input', (e) => {
     if (e.target.id === 'ai-grupo') e.target.dataset.touched = '1';
     if (e.target.id === 'ai-nombre') delete e.target.dataset.touched;
 });
+

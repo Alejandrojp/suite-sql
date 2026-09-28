@@ -7,18 +7,55 @@ const BASE_URL = 'js/inteligencia-base.json';
 let BBDD_BASE = {};
 let baseCargada = false;
 
+const GRUPOS_URL = 'js/grupos-nombres.json';
+let GRUPOS_NOMBRES = {};
+let gruposCargados = false;
+
+export async function cargarGrupos() {
+    if (gruposCargados) return GRUPOS_NOMBRES;
+    try {
+        const r = await fetch(GRUPOS_URL + '?v=' + Date.now());
+        GRUPOS_NOMBRES = r.ok ? await r.json() : {};
+    } catch (e) {
+        console.warn('No se pudo cargar el diccionario de grupos:', e);
+        GRUPOS_NOMBRES = {};
+    }
+    gruposCargados = true;
+    return GRUPOS_NOMBRES;
+}
+
+export function nombreGrupo(id) {
+    if (id === undefined || id === null || id === '') return '—';
+    return GRUPOS_NOMBRES[String(id)] || `Grupo ${id}`;
+}
+
+export function listarGrupos() {
+    return Object.entries(GRUPOS_NOMBRES)
+        .map(([id, nombre]) => ({ id: Number(id), nombre }))
+        .sort((a, b) => a.id - b.id);
+}
+
 // ============================================================
 // GESTIÓN DE LA BASE DE DATOS LOCAL
 // ============================================================
+let _bbddCache = null;
+
 export function obtenerBBDD() {
-    try { return JSON.parse(localStorage.getItem(DB_KEY) || '{}'); }
-    catch (e) { console.warn('sqlGenArticulosInteligentes corrupto, se reinicia.', e); return {}; }
+    if (_bbddCache) return _bbddCache;
+    try { _bbddCache = JSON.parse(localStorage.getItem(DB_KEY) || '{}'); }
+    catch (e) { console.warn('sqlGenArticulosInteligentes corrupto, se reinicia.', e); _bbddCache = {}; }
+    return _bbddCache;
 }
 
 export function guardarBBDD(db) {
+    _bbddCache = db;
     try { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
     catch (e) { console.warn('No se pudo guardar la BD IA (localStorage lleno?)', e); }
 }
+
+// Limpiar caché cuando se resetea externamente
+export function borrarTodaLaBBDD() { _bbddCache = null; localStorage.removeItem(DB_KEY); }
+export function resetearUsuario()    { _bbddCache = null; localStorage.removeItem(DB_KEY); }
 
 // ============================================================
 // CAPA BASE (JSON pre-clasificado, solo lectura)
@@ -34,6 +71,9 @@ export async function cargarBase() {
         BBDD_BASE = {};
     }
     baseCargada = true;
+    if (Object.keys(BBDD_BASE).length === 0) {
+        console.warn('⚠️ Base IA vacía: revisa que js/inteligencia-base.json exista');
+    }
     return BBDD_BASE;
 }
 
@@ -94,9 +134,6 @@ export function borrarArticulo(codigo) {
     guardarBBDD(db);
 }
 
-export function borrarTodaLaBBDD() {
-    localStorage.removeItem(DB_KEY);
-}
 
 // ============================================================
 // EXPORTAR / IMPORTAR / RESETEAR CAPA USUARIO
@@ -116,10 +153,6 @@ export function importarUsuario(jsonText, modoMerge = true) {
     } catch (e) {
         return { ok: false, error: e.message };
     }
-}
-
-export function resetearUsuario() {
-    localStorage.removeItem(DB_KEY);
 }
 
 export function volverABase(codigo) {

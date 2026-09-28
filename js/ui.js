@@ -13,15 +13,19 @@ export function showNotification(msg) {
     const area = document.getElementById('notification-area');
     const el = document.createElement('div');
     el.className = 'notification-msg';
-    
+
+    // Truncar mensajes muy largos para no tapar la pantalla
+    const MAX = 220;
+    const str = String(msg);
+    const texto = str.length > MAX ? str.slice(0, MAX) + '…' : str;
+
     const iconSpan = document.createElement('span');
     iconSpan.textContent = '🔔';
-    
-    const textNode = document.createTextNode(' ' + msg);
-    
+    const textNode = document.createTextNode(' ' + texto);
+
     el.appendChild(iconSpan);
     el.appendChild(textNode);
-    
+    el.title = str; // tooltip con el mensaje completo por si lo cortamos
     area.appendChild(el);
     setTimeout(() => { el.remove(); }, 3000);
 }
@@ -403,7 +407,7 @@ export function crearListaTiendas(containerId, counterId, onChangeCallback) {
         nombreLimpio = nombreLimpio.replace(patronID, "").replace(patronID, "");
         if(nombreLimpio.trim() === "") nombreLimpio = tienda.name;
 
-        label.innerHTML = `<strong>${tienda.id}</strong> - ${nombreLimpio}`; 
+        label.innerHTML = `<strong>${escapeHTML(tienda.id)}</strong> - ${escapeHTML(nombreLimpio)}`; 
         itemDiv.appendChild(checkbox); 
         itemDiv.appendChild(label); 
         itemsContainer.appendChild(itemDiv);

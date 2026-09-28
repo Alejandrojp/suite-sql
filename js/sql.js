@@ -432,7 +432,7 @@ export function generarSQLBorrar() {
         let textBackup = isExcel ? document.getElementById('articulos_excel_del').value.replace(/\r?\n|\r/g, " ") : document.getElementById('articulos_borrar').value.replace(/\r?\n|\r/g, " ");
         const sqlRollback = `SELECT 'Debes insertar de nuevo los articulos borrados: ${textBackup}' AS Info_Rollback;`;
 
-        let deleteScript = wrapTransaction(sqlReorder + "\n\n" + sqlDelete, 'safeModeDel');
+        let deleteScript = wrapTransaction(sqlReorder + "\n\n" + sqlDelete, 'safeMode');
 
         document.getElementById('dq_audit').textContent = sqlAudit;
         document.getElementById('dq_reorder').textContent = sqlReorder;
@@ -650,7 +650,7 @@ export function generarSQLSwap() {
     AND CheckOld.idArticulo IS NULL;`;
 
         document.getElementById('sq_audit').textContent = sqlAudit;
-        document.getElementById('sq_full').textContent = wrapTransaction(sqlScript, 'safeModeSwap');
+        document.getElementById('sq_full').textContent = wrapTransaction(sqlScript, 'safeMode');
         document.getElementById('sq_check').textContent = sqlCheck;
         document.getElementById('sq_rollback').textContent = sqlRollback;
 
@@ -696,7 +696,7 @@ export function generarSQLReparar() {
         const sqlUpdate = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT \n        idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendas}) \n        AND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''} \n        AND MA.situacion <> 'B' \n        ORDER BY \n            D.idRestaurante, D.idEmpresa, D.idGrupo, \n            COALESCE(D.orden, 999999) ASC, \n            D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) Ordered, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden; --`;
 
         const sqlCheck = `SELECT R.nombre as Tienda, G.nombre as Grupo, G.idGrupo, D.idArticulo, D.orden, MA.situacion \nFROM maeres R \nJOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa \nJOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa \nJOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendas}) \nAND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''} \nORDER BY R.codigo, G.nombre, D.orden;`;
-        let fullScript = wrapTransaction(sqlBackup + "\n\n" + sqlDelete + "\n\n" + sqlUpdate, 'safeModeRepair');
+        let fullScript = wrapTransaction(sqlBackup + "\n\n" + sqlDelete + "\n\n" + sqlUpdate, 'safeMode');
 
         document.getElementById('rq_delete').textContent = fullScript;
         document.getElementById('rq_update').textContent = sqlUpdate;

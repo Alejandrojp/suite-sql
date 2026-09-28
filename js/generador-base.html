@@ -12,7 +12,8 @@
     <pre id="log" style="background:#f4f4f4; padding:10px; border-radius:6px;"></pre>
 
     <script type="module">
-        import { clasificar } from './inteligencia.js';
+        // ⚠️ NO importamos clasificar. Leemos la columna B (id_grupo) del Excel directamente.
+        // Así la base común refleja EXACTAMENTE lo que ARTS.py clasificó.
 
         document.getElementById('xlsx-file').addEventListener('change', async (e) => {
             const file = e.target.files[0];
@@ -24,16 +25,20 @@
 
             const base = {};
             let count = 0;
+            let saltadas = 0;
             filas.forEach((row, i) => {
                 if (i === 0) return; // cabecera
-                const [cod, nombre, familia, subfamilia] = row;
-                if (!cod || !nombre) return;
-                const r = clasificar(nombre, familia || '', subfamilia || '');
-                base[String(cod).trim()] = r.id_grupo;
+                const cod = row[0];                 // A: Código
+                const idGrupo = row[1];             // B: id_grupo  ← FUENTE DE VERDAD
+                if (!cod) { saltadas++; return; }
+                const idNum = parseInt(idGrupo, 10);
+                if (isNaN(idNum) || idNum <= 0) { saltadas++; return; }
+                base[String(cod).trim()] = idNum;
                 count++;
             });
 
-            document.getElementById('log').textContent = `✅ ${count} artículos clasificados`;
+            document.getElementById('log').textContent =
+                `✅ ${count} artículos importados desde id_grupo · ⚠️ ${saltadas} filas ignoradas`;
 
             const blob = new Blob([JSON.stringify(base)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
