@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Generador Base IA - Suite SQL</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style/dist/xlsx.bundle.js"></script>
+</head>
+<body style="font-family: sans-serif; padding: 20px; max-width: 700px;">
+    <h1>🧠 Generador de Base IA</h1>
+    <p>Carga el Excel MMS200 para regenerar <code>inteligencia-base.json</code></p>
+    <input type="file" id="xlsx-file" accept=".xlsx,.xls">
+    <pre id="log" style="background:#f4f4f4; padding:10px; border-radius:6px;"></pre>
+
+    <script type="module">
+        import { clasificar } from './inteligencia.js';
+
+        document.getElementById('xlsx-file').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const buf = await file.arrayBuffer();
+            const wb = XLSX.read(buf, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const filas = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+
+            const base = {};
+            let count = 0;
+            filas.forEach((row, i) => {
+                if (i === 0) return; // cabecera
+                const [cod, nombre, familia, subfamilia] = row;
+                if (!cod || !nombre) return;
+                const r = clasificar(nombre, familia || '', subfamilia || '');
+                base[String(cod).trim()] = r.id_grupo;
+                count++;
+            });
+
+            document.getElementById('log').textContent = `✅ ${count} artículos clasificados`;
+
+            const blob = new Blob([JSON.stringify(base)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'inteligencia-base.json';
+            a.click();
+        });
+    </script>
+</body>
+</html>

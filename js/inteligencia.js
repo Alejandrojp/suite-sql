@@ -1,6 +1,11 @@
 // js/inteligencia.js
 
 const DB_KEY = 'sqlGenArticulosInteligentes';
+const BASE_URL = 'js/inteligencia-base.json';
+
+// Capa base (solo lectura, se carga una vez del JSON)
+let BBDD_BASE = {};
+let baseCargada = false;
 
 // ============================================================
 // GESTIÓN DE LA BASE DE DATOS LOCAL
@@ -15,14 +20,41 @@ export function guardarBBDD(db) {
     catch (e) { console.warn('No se pudo guardar la BD IA (localStorage lleno?)', e); }
 }
 
+// ============================================================
+// CAPA BASE (JSON pre-clasificado, solo lectura)
+// ============================================================
+export async function cargarBase() {
+    if (baseCargada) return BBDD_BASE;
+    try {
+        const r = await fetch(BASE_URL + '?v=' + Date.now());
+        if (r.ok) BBDD_BASE = await r.json();
+        else BBDD_BASE = {};
+    } catch (e) {
+        console.warn('No se pudo cargar la base IA:', e);
+        BBDD_BASE = {};
+    }
+    baseCargada = true;
+    return BBDD_BASE;
+}
+
+export function baseEstaCargada() { return baseCargada; }
+export function contarBase() { return Object.keys(BBDD_BASE).length; }
+export function contarUsuario() { return Object.keys(obtenerBBDD()).length; }
+
 /**
  * Aprende un artículo. Si ya existe y `forzar` es false, no sobreescribe.
  * Devuelve true si se guardó, false si se omitió por duplicado.
  */
 export function aprenderArticulo(codigo, nombre, idGrupo, motivo, forzar = false) {
     if (!codigo) return false;
-    const db = obtenerBBDD();
+    const db = obtenerBBDD();  // solo capa USUARIO
     const codStr = String(codigo);
+    const baseValor = BBDD_BASE[codStr];
+
+    // Si ya está en la base común con el mismo grupo y no forzamos, no duplicar
+    if (!forzar && baseValor !== undefined && parseInt(baseValor) === parseInt(idGrupo)) {
+        return false;
+    }
 
     if (db[codStr] && !forzar) {
         // Si cambia el grupo, actualizamos solo el grupo (no es sobreescribir "a ciegas")
@@ -46,7 +78,14 @@ export function aprenderArticulo(codigo, nombre, idGrupo, motivo, forzar = false
 
 export function consultarArticulo(codigo) {
     if (!codigo) return null;
-    return obtenerBBDD()[String(codigo)] || null;
+    const codStr = String(codigo);
+    // 1. Capa usuario (tiene prioridad porque puede tener correcciones)
+    const usuario = obtenerBBDD()[codStr];
+    if (usuario) return { ...usuario, fuente: 'usuario' };
+    // 2. Capa base (solo grupo, sin nombre ni motivo)
+    const base = BBDD_BASE[codStr];
+    if (base !== undefined) return { grupo: parseInt(base), nombre: '', motivo: 'base común', fuente: 'base' };
+    return null;
 }
 
 export function borrarArticulo(codigo) {
@@ -59,8 +98,46 @@ export function borrarTodaLaBBDD() {
     localStorage.removeItem(DB_KEY);
 }
 
+// ============================================================
+// EXPORTAR / IMPORTAR / RESETEAR CAPA USUARIO
+// ============================================================
+export function exportarUsuario() {
+    return JSON.stringify(obtenerBBDD());
+}
+
+export function importarUsuario(jsonText, modoMerge = true) {
+    try {
+        const data = JSON.parse(jsonText);
+        if (typeof data !== 'object' || Array.isArray(data)) throw new Error('Formato inválido');
+        const db = modoMerge ? obtenerBBDD() : {};
+        Object.assign(db, data);
+        guardarBBDD(db);
+        return { ok: true, importados: Object.keys(data).length, total: Object.keys(db).length };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+}
+
+export function resetearUsuario() {
+    localStorage.removeItem(DB_KEY);
+}
+
+export function volverABase(codigo) {
+    const db = obtenerBBDD();
+    delete db[String(codigo)];
+    guardarBBDD(db);
+}
+
 export function listarArticulosAprendidos() {
-    return Object.entries(obtenerBBDD()).map(([codigo, data]) => ({ codigo, ...data }));
+    const map = {};
+    // Base primero (luego usuario sobreescribe)
+    for (const [cod, grupo] of Object.entries(BBDD_BASE)) {
+        map[cod] = { codigo: cod, grupo: parseInt(grupo), nombre: '', motivo: 'base común', fuente: 'base' };
+    }
+    for (const [cod, data] of Object.entries(obtenerBBDD())) {
+        map[cod] = { codigo: cod, ...data, fuente: 'usuario' };
+    }
+    return Object.values(map);
 }
 
 // ============================================================

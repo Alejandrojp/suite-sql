@@ -902,9 +902,14 @@ function repintarTodasLasListasDeTiendas() {
 // ==========================================
 // 4. INICIALIZACIÓN Y EVENT DELEGATOR
 // ==========================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     if (State.getTheme() === 'dark') document.body.classList.add('dark');
     else document.body.classList.remove('dark');
+
+    // Cargar base de conocimiento (asíncrono, no bloquea la UI)
+    UI.showNotification("🧠 Cargando base de conocimiento...");
+    await Inteligencia.cargarBase();
+    console.log(`🧠 Base IA cargada: ${Inteligencia.contarBase()} artículos · ${Inteligencia.contarUsuario()} aprendidos por ti`);
 
     State.cargarTiendas(defaultTiendasData);
     State.cargarGruposPersonalizados();
@@ -969,32 +974,60 @@ function renderIaManagerList() {
     const list = document.getElementById('iaManagerList');
     if (!list) return;
     list.innerHTML = '';
+
     const items = Inteligencia.listarArticulosAprendidos();
+    const totalBase = Inteligencia.contarBase();
+    const totalUser = Inteligencia.contarUsuario();
+
+    // Cabecera con stats
+    const stats = document.getElementById('ia-stats');
+    if (stats) {
+        stats.innerHTML = `📚 <strong>${totalBase}</strong> en base común · 🌱 <strong>${totalUser}</strong> aprendidos por ti`;
+    }
+
     if (items.length === 0) {
         list.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">No hay artículos aprendidos todavía.</div>';
         return;
     }
-    items.sort((a, b) => String(a.codigo).localeCompare(String(b.codigo)));
+
+    // Filtro de búsqueda
+    const filtro = (document.getElementById('ia-search')?.value || '').trim().toLowerCase();
+    const filtrados = filtro
+        ? items.filter(it => String(it.codigo).toLowerCase().includes(filtro) || (it.nombre || '').toLowerCase().includes(filtro))
+        : items;
+
+    filtrados.sort((a, b) => String(a.codigo).localeCompare(String(b.codigo)));
+
     const frag = document.createDocumentFragment();
-    items.forEach(it => {
+    filtrados.slice(0, 500).forEach(it => {
+        const esBase = it.fuente === 'base';
         const div = document.createElement('div');
         div.className = 'group-manager-item';
         div.innerHTML = `
             <div style="flex:1; min-width:0;">
                 <span class="group-name">#${it.codigo}</span>
                 <span class="group-count">→ grupo ${it.grupo}</span>
+                <span style="margin-left:8px; font-size:11px; ${esBase ? 'color:#6c757d;' : 'color:#16a34a;'}">${esBase ? '📚 común' : '🌱 tuyo'}</span>
                 <div style="font-size:11.5px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${UI.escapeHTML(it.nombre || '')}</div>
             </div>
-            <input type="number" value="${it.grupo}" data-ia-cod="${it.codigo}"
-                class="editor-input" style="width:70px; margin-right:8px;">
-            <button class="btn-remove-row" style="margin:0;" data-action="actualizarIA" data-cod="${it.codigo}">💾</button>
-            <button class="btn-remove-row" style="margin:0 0 0 5px;" data-action="borrarIA" data-cod="${it.codigo}">🗑️</button>
+            <input type="number" value="${it.grupo}" data-ia-cod="${it.codigo}" class="editor-input" style="width:70px; margin-right:8px;">
+            ${esBase
+                ? `<button class="btn-remove-row" style="margin:0; background:#e67e22;" data-action="corregirIA" data-cod="${it.codigo}" title="Corregir en mi capa (no afecta la base común)">⚠️</button>`
+                : `<button class="btn-remove-row" style="margin:0;" data-action="actualizarIA" data-cod="${it.codigo}">💾</button>
+                   <button class="btn-remove-row" style="margin:0 0 0 5px;" data-action="borrarIA" data-cod="${it.codigo}">🗑️</button>`}
         `;
         frag.appendChild(div);
     });
+
+    if (filtrados.length > 500) {
+        const aviso = document.createElement('div');
+        aviso.style.cssText = 'padding:10px; text-align:center; color:#666; font-size:12px;';
+        aviso.textContent = `Mostrando 500 de ${filtrados.length} (usa el buscador para filtrar)`;
+        frag.appendChild(aviso);
+    }
+
     list.appendChild(frag);
 }
-
 // --- DELEGACIÓN GLOBAL DE EVENTOS ---
 document.addEventListener('click', (e) => {
     const target = e.target;
@@ -1151,11 +1184,65 @@ document.addEventListener('click', (e) => {
             break;
         }
 
-        case 'borrarTodaIA': {
+                case 'borrarTodaIA': {
             if (!confirm("⚠️ ¿Borrar TODA la base de datos de aprendizaje IA?\nEsto no se puede deshacer.")) break;
             Inteligencia.borrarTodaLaBBDD();
             UI.showNotification("🧹 Base de datos IA vaciada.");
             UI.closeModal('iaManagerModal');
+            break;
+        }
+
+        case 'exportarUsuarioIA': {
+            const json = Inteligencia.exportarUsuario();
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            a.download = `inteligencia_usuario_${ts}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            UI.showNotification("💾 Backup de tus aprendizajes descargado");
+            break;
+        }
+
+        case 'importarUsuarioIA': {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = async (ev) => {
+                const file = ev.target.files[0];
+                if (!file) return;
+                const texto = await file.text();
+                const merge = confirm("¿Mantener tus aprendizajes actuales y añadir los del archivo?\n\nAceptar = MERGE (no borra nada)\nCancelar = REEMPLAZAR todo");
+                const r = Inteligencia.importarUsuario(texto, merge);
+                if (r.ok) {
+                    UI.showNotification(`📂 ${r.importados} artículos importados (total usuario: ${r.total})`);
+                    renderIaManagerList();
+                } else {
+                    UI.showNotification(`❌ Error: ${r.error}`);
+                }
+            };
+            input.click();
+            break;
+        }
+
+        case 'resetearUsuarioIA': {
+            if (!confirm("⚠️ ¿Borrar TODOS tus aprendizajes personales?\n\nLa base común 📚 NO se toca. Solo pierdes lo que has aprendido tú.")) break;
+            Inteligencia.resetearUsuario();
+            UI.showNotification("🧹 Tus aprendizajes han sido reseteados");
+            renderIaManagerList();
+            break;
+        }
+
+        case 'corregirIA': {
+            const cod = btn.dataset.cod;
+            const input = document.querySelector(`input[data-ia-cod="${cod}"]`);
+            const nuevoGrupo = parseInt(input.value, 10);
+            if (!nuevoGrupo) { UI.showNotification("⚠️ Grupo inválido"); break; }
+            Inteligencia.aprenderArticulo(cod, '', nuevoGrupo, 'Corrección manual sobre base común', true);
+            UI.showNotification(`✅ #${cod} corregido en tu capa (grupo ${nuevoGrupo})`);
+            renderIaManagerList();
             break;
         }
         case 'guardarTiendasEditadas': guardarTiendasEditadas(); break;
@@ -1324,6 +1411,7 @@ document.addEventListener('keyup', (e) => {
         if (e.target.id === 'search-excel-p_del') buscarExcel('p_del', e.target.value);
         if (e.target.id === 'search-excel-p_upd') buscarExcel('p_upd', e.target.value);
         if (e.target.id === 'filter-traspaso') filtrarTiendas('list-traspaso', 'filter-traspaso');
+        if (e.target.id === 'ia-search') renderIaManagerList();
 
     }, 250);
 });
