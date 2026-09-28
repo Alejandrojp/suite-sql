@@ -1875,3 +1875,30 @@ document.addEventListener('paste', function (e) {
         setOcrModalImage(imageFile);
     }
 });
+// Re-clasificar al vuelo cuando el usuario escribe el nombre en el modal IA
+document.addEventListener('input', (e) => {
+    if (e.target.id !== 'ai-nombre') return;
+    const nombre = e.target.value.trim();
+    const sugBox = document.getElementById('ai-sugerencia-box');
+    const sugId = document.getElementById('ai-sug-id');
+    const sugMotivo = document.getElementById('ai-sug-motivo');
+    const grupoInput = document.getElementById('ai-grupo');
+    if (!nombre) {
+        sugBox.style.display = 'none';
+        return;
+    }
+    const sug = Inteligencia.clasificar(nombre, '', '');
+    sugId.innerText = sug.id_grupo;
+    sugMotivo.innerText = sug.motivo;
+    sugBox.style.display = 'block';
+    // Solo autocompletar si el usuario no ha tocado el campo manualmente
+    if (!grupoInput.dataset.touched) {
+        grupoInput.value = sug.id_grupo;
+    }
+});
+
+// Marcar el grupo como "tocado" si el usuario lo escribe manualmente
+document.addEventListener('input', (e) => {
+    if (e.target.id === 'ai-grupo') e.target.dataset.touched = '1';
+    if (e.target.id === 'ai-nombre') delete e.target.dataset.touched;
+});
