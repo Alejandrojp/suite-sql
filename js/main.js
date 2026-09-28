@@ -4,6 +4,83 @@ import * as State from './state.js';
 import * as UI from './ui.js';
 import * as SQL from './sql.js';
 import * as Parser from './excelParser.js';
+import * as Inteligencia from './inteligencia.js';
+
+// ==========================================
+// COLA DE APRENDIZAJE IA
+// ==========================================
+let aiQueue = [];
+let aiAprendidosEnSesion = 0;
+
+/**
+ * Verifica si un artículo ya está aprendido. Si no, lo añade a la cola
+ * y dispara el procesado del modal. Devuelve el grupo si ya lo conoce.
+ */
+window.verificarArticuloInteligente = function (idArticulo, nombreContexto = "", fam = "", sub = "") {
+    if (!idArticulo) return null;
+
+    const existente = Inteligencia.consultarArticulo(idArticulo);
+    if (existente) return existente.grupo;
+
+    aiQueue.push({
+        id: String(idArticulo),
+        nombre: nombreContexto || "",
+        fam: fam || "",
+        sub: sub || ""
+    });
+
+    // Si no hay modal abierto, arranca el procesado
+    const modalEl = document.getElementById('aiModal');
+    if (!modalEl || modalEl.style.display !== 'flex') {
+        procesarSiguienteIA();
+    }
+    return null;
+};
+
+function procesarSiguienteIA() {
+    const modalEl = document.getElementById('aiModal');
+    if (aiQueue.length === 0) {
+        if (modalEl) UI.closeModal('aiModal');
+        if (aiAprendidosEnSesion > 0) {
+            UI.showNotification(`🧠 ${aiAprendidosEnSesion} artículo(s) aprendido(s) en esta sesión`);
+            aiAprendidosEnSesion = 0;
+        }
+        return;
+    }
+
+    const art = aiQueue.shift();
+
+    // Rellenar el modal
+    document.getElementById('ai-codigo').value = art.id;
+    document.getElementById('ai-nombre').value = art.nombre || '';
+
+    const sugBox = document.getElementById('ai-sugerencia-box');
+    const grupoInput = document.getElementById('ai-grupo');
+    const sugId = document.getElementById('ai-sug-id');
+    const sugMotivo = document.getElementById('ai-sug-motivo');
+
+    if (art.nombre) {
+        const sug = Inteligencia.clasificar(art.nombre, art.fam, art.sub);
+        sugId.innerText = sug.id_grupo;
+        sugMotivo.innerText = sug.motivo;
+        grupoInput.value = sug.id_grupo;
+        sugBox.style.display = 'block';
+    } else {
+        grupoInput.value = '';
+        sugBox.style.display = 'none';
+    }
+
+    // Indicador de "quedan N por revisar"
+    const contadorEl = document.getElementById('ai-contador-cola');
+    if (contadorEl) {
+        contadorEl.innerText = aiQueue.length > 0
+            ? `(${aiQueue.length} más en cola)`
+            : '(último)';
+    }
+
+    UI.openModal('aiModal');
+    setTimeout(() => document.getElementById('ai-nombre').focus(), 80);
+}
 
 // --- UTILIDAD DE DEBOUNCE PARA AUTOGUARDADO ---
 function debounce(func, wait) {
@@ -506,12 +583,9 @@ function limpiarInputArticulos(id, badgeId) {
     let raw = textarea.value;
 
     let cleanArray = raw.split(/[\r\n,\t\s]+/)
-                        .map(s => s.replace(/\D/g, '')) // Extrae estrictamente solo los números
-                        .filter(s => s !== '');         // Filtra los bloques vacíos
+        .map(s => s.replace(/\D/g, ''))
+        .filter(s => s !== '');
 
-    // Si el usuario ha escrito algo pero no se ha podido extraer ningún número válido,
-    // NO vaciamos el campo (antes esto borraba todo lo escrito). Simplemente no tocamos nada
-    // para que pueda seguir editando sin perder lo que llevaba.
     if (raw.trim() !== '' && cleanArray.length === 0) return;
 
     let uniqueArray = [...new Set(cleanArray)];
@@ -526,6 +600,35 @@ function limpiarInputArticulos(id, badgeId) {
         textarea.value = cleanText;
         UI.actualizarContadorArticulosGenerico(id, badgeId);
         guardarEstadoGlobal();
+    }
+
+    // --- COLA IA: solo si estamos en TPV y en pestañas que importan el grupo ---
+    if (uniqueArray.length > 0 && uniqueArray.length <= 50) {
+        const isAppTpvs = document.getElementById('app-tpvs').classList.contains('active');
+        const isTabMass = document.getElementById('tab-masivo').classList.contains('active');
+        const isTabSwap = document.getElementById('tab-swap').classList.contains('active');
+
+        if (isAppTpvs && (isTabMass || isTabSwap)) {
+            // Si estamos en modo Excel, intentar sacar el nombre/contexto por si la IA puede sugerir
+            const isExcelMode = isTabMass && document.querySelector('input[name="modo_masivo"]:checked')?.value.includes('excel');
+            let lookupContexto = () => ({ nombre: '', fam: '', sub: '' });
+            if (isExcelMode) {
+                const filas = (State.state.excel.mass?.data || []).filter(d => !d.duplicate);
+                lookupContexto = (artId) => {
+                    const fila = filas.find(f => String(f.art) === String(artId));
+                    return fila ? { nombre: fila.grp || '', fam: '', sub: '' } : { nombre: '', fam: '', sub: '' };
+                };
+            }
+
+            const desconocidos = uniqueArray.filter(a => !Inteligencia.consultarArticulo(a));
+            if (desconocidos.length > 0) {
+                UI.showNotification(`🧠 ${desconocidos.length} artículo(s) nuevo(s): revisa y aprende`);
+                desconocidos.forEach(artId => {
+                    const ctx = lookupContexto(artId);
+                    window.verificarArticuloInteligente(artId, ctx.nombre, ctx.fam, ctx.sub);
+                });
+            }
+        }
     }
 }
 
@@ -862,6 +965,36 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedTabPlantillas) switchTab(savedTabPlantillas);
 });
 
+function renderIaManagerList() {
+    const list = document.getElementById('iaManagerList');
+    if (!list) return;
+    list.innerHTML = '';
+    const items = Inteligencia.listarArticulosAprendidos();
+    if (items.length === 0) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">No hay artículos aprendidos todavía.</div>';
+        return;
+    }
+    items.sort((a, b) => String(a.codigo).localeCompare(String(b.codigo)));
+    const frag = document.createDocumentFragment();
+    items.forEach(it => {
+        const div = document.createElement('div');
+        div.className = 'group-manager-item';
+        div.innerHTML = `
+            <div style="flex:1; min-width:0;">
+                <span class="group-name">#${it.codigo}</span>
+                <span class="group-count">→ grupo ${it.grupo}</span>
+                <div style="font-size:11.5px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${UI.escapeHTML(it.nombre || '')}</div>
+            </div>
+            <input type="number" value="${it.grupo}" data-ia-cod="${it.codigo}"
+                class="editor-input" style="width:70px; margin-right:8px;">
+            <button class="btn-remove-row" style="margin:0;" data-action="actualizarIA" data-cod="${it.codigo}">💾</button>
+            <button class="btn-remove-row" style="margin:0 0 0 5px;" data-action="borrarIA" data-cod="${it.codigo}">🗑️</button>
+        `;
+        frag.appendChild(div);
+    });
+    list.appendChild(frag);
+}
+
 // --- DELEGACIÓN GLOBAL DE EVENTOS ---
 document.addEventListener('click', (e) => {
     const target = e.target;
@@ -913,6 +1046,118 @@ document.addEventListener('click', (e) => {
                 UI.showNotification("✅ Tiendas restauradas al estado original.");
             }
             break;
+        case 'abrirModalAutoClasificar':
+            document.getElementById('paste-autoclasificar').value = '';
+            UI.openModal('autoClasificarModal');
+            document.getElementById('paste-autoclasificar').focus();
+            break;
+
+        case 'procesarAutoClasificacion': {
+            const txt = document.getElementById('paste-autoclasificar').value;
+            const lineasClasif = txt.split(/[\r\n]+/).filter(l => l.trim() !== '');
+            let resultadoFinal = [];
+            let aprendidos = [];
+            let conocidos = 0;
+
+            lineasClasif.forEach(line => {
+                const parts = line.split('\t');
+                if (parts.length >= 2) {
+                    const cod = parts[0].trim();
+                    const nombre = parts[1].trim();
+                    const familia = parts[2] ? parts[2].trim() : '';
+                    const subfamilia = parts[3] ? parts[3].trim() : '';
+
+                    const previo = Inteligencia.consultarArticulo(cod);
+                    let grupo;
+                    if (previo) {
+                        grupo = previo.grupo;
+                        conocidos++;
+                    } else {
+                        const clasificacion = Inteligencia.clasificar(nombre, familia, subfamilia);
+                        grupo = clasificacion.id_grupo;
+                        Inteligencia.aprenderArticulo(cod, nombre, grupo, clasificacion.motivo);
+                        aprendidos.push({ cod, nombre, grupo, motivo: clasificacion.motivo });
+                    }
+                    resultadoFinal.push(`${cod}\t${grupo}`);
+                }
+            });
+
+            if (resultadoFinal.length === 0) {
+                UI.showNotification("⚠️ No se encontró texto válido para clasificar.");
+                return;
+            }
+
+            document.getElementById('articulos_excel').value = resultadoFinal.join('\n');
+            UI.closeModal('autoClasificarModal');
+            document.getElementById('articulos_excel').dispatchEvent(new Event('input'));
+
+            const total = resultadoFinal.length;
+            let msg = `✅ ${total} clasificados`;
+            if (aprendidos.length > 0) msg += ` · 🧠 ${aprendidos.length} nuevos aprendidos`;
+            if (conocidos > 0) msg += ` · ♻️ ${conocidos} ya conocidos`;
+            UI.showNotification(msg);
+
+            if (aprendidos.length > 0) {
+                console.group(`🧠 Auto-clasificación: ${aprendidos.length} artículos aprendidos`);
+                aprendidos.forEach(a => console.log(`#${a.cod} → grupo ${a.grupo} (${a.motivo}) · ${a.nombre}`));
+                console.groupEnd();
+            }
+            break;
+        }
+        case 'guardarArticuloIA': {
+            const aiCod = document.getElementById('ai-codigo').value;
+            const aiNom = document.getElementById('ai-nombre').value.trim();
+            const aiGrp = document.getElementById('ai-grupo').value;
+            const aiMot = document.getElementById('ai-sug-motivo')?.innerText || 'Añadido manualmente';
+
+            if (!aiCod || !aiGrp) {
+                UI.showNotification("⚠️ Falta el grupo.");
+                return;
+            }
+            const ok = Inteligencia.aprenderArticulo(aiCod, aiNom, aiGrp, aiMot);
+            if (ok) {
+                aiAprendidosEnSesion++;
+                UI.showNotification(`🧠 Artículo ${aiCod} guardado (grupo ${aiGrp})`);
+            }
+            procesarSiguienteIA();
+            break;
+        }
+        case 'saltarArticuloIA':
+            procesarSiguienteIA();
+            break;
+
+        case 'abrirGestorIA': {
+            renderIaManagerList();
+            UI.openModal('iaManagerModal');
+            break;
+        }
+
+        case 'borrarIA': {
+            if (!confirm(`¿Olvidar el artículo #${btn.dataset.cod}?`)) break;
+            Inteligencia.borrarArticulo(btn.dataset.cod);
+            UI.showNotification(`🗑️ Artículo #${btn.dataset.cod} eliminado del aprendizaje.`);
+            renderIaManagerList(); // refresca sin re-disparar el botón
+            break;
+        }
+
+        case 'actualizarIA': {
+            const cod = btn.dataset.cod;
+            const input = document.querySelector(`input[data-ia-cod="${cod}"]`);
+            const nuevoGrupo = parseInt(input.value, 10);
+            if (!nuevoGrupo) { UI.showNotification("⚠️ Grupo inválido"); break; }
+            const actual = Inteligencia.consultarArticulo(cod);
+            Inteligencia.aprenderArticulo(cod, actual?.nombre || '', nuevoGrupo, actual?.motivo || 'Edición manual', true);
+            UI.showNotification(`✅ #${cod} actualizado a grupo ${nuevoGrupo}`);
+            break;
+        }
+
+        case 'borrarTodaIA': {
+            if (!confirm("⚠️ ¿Borrar TODA la base de datos de aprendizaje IA?\nEsto no se puede deshacer.")) break;
+            Inteligencia.borrarTodaLaBBDD();
+            UI.showNotification("🧹 Base de datos IA vaciada.");
+            UI.closeModal('iaManagerModal');
+            break;
+        }
         case 'guardarTiendasEditadas': guardarTiendasEditadas(); break;
         case 'convertirNumerosAIds': convertirNumerosAIds(); break;
         case 'openGroupManager': openGroupManager(); break;
@@ -1183,13 +1428,13 @@ function getExpectedColumnsForTarget(targetId) {
     const modoPDel = document.querySelector('input[name="modo_p_del"]:checked')?.value;
 
     switch (targetId) {
-        case 'articulos_excel':      return modoMasivo === 'excel_tienda' ? 3 : 2; // Tienda/Art/Grupo o Art/Grupo
-        case 'articulos_excel_del':  return 2; // Artículo, Grupo
+        case 'articulos_excel': return modoMasivo === 'excel_tienda' ? 3 : 2; // Tienda/Art/Grupo o Art/Grupo
+        case 'articulos_excel_del': return 2; // Artículo, Grupo
         case 'articulos_excel_swap': return 2; // ID Viejo, ID Nuevo
-        case 'articulos_swap':       return 2; // ID Viejo, ID Nuevo (modo manual)
-        case 'paste-add':            return modoPAdd === 'excel_tienda' ? 4 : 3; // Tienda/Art/Stock/Prov o Cod/Art/Stock
-        case 'paste-del':            return modoPDel === 'excel_tienda' ? 3 : 2; // Tienda/Art/Prov o Cod/Art
-        default:                     return 1; // Listas simples: articulos, prov-articulos, etc.
+        case 'articulos_swap': return 2; // ID Viejo, ID Nuevo (modo manual)
+        case 'paste-add': return modoPAdd === 'excel_tienda' ? 4 : 3; // Tienda/Art/Stock/Prov o Cod/Art/Stock
+        case 'paste-del': return modoPDel === 'excel_tienda' ? 3 : 2; // Tienda/Art/Prov o Cod/Art
+        default: return 1; // Listas simples: articulos, prov-articulos, etc.
     }
 }
 
@@ -1206,7 +1451,7 @@ function getOcrWorker() {
             await worker.initialize('spa+eng');
             return worker;
         })().catch(err => {
-            ocrWorkerPromise = null; 
+            ocrWorkerPromise = null;
             throw err;
         });
     }
@@ -1469,22 +1714,26 @@ function insertarOcrModal() {
 
     const modo = document.querySelector('input[name="ocr_modo"]:checked')?.value || 'articulos';
     let lines = [];
+    let articulosParaAprender = [];
 
     if (modo === 'ambos') {
         if (targetEsTablaExcelTienda(ocrModal.targetId)) {
             lines = ocrModal.rows.map(r => `${r.tienda}\t${r.articulo}`);
+            articulosParaAprender = ocrModal.rows.map(r => r.articulo);
         } else {
             const storeList = targetEl.closest('.tab-content')?.querySelector('.store-list');
             if (storeList) {
                 const tiendasUnicas = [...new Set(ocrModal.rows.map(r => r.tienda))];
                 aplicarGrupoPersonalizado(storeList.id, tiendasUnicas);
             } else {
-                UI.showNotification("⚠️ No se ha encontrado un selector de tiendas en esta pestaña: revisa las tiendas manualmente.");
+                UI.showNotification("⚠️ No se ha encontrado un selector de tiendas: revisa las tiendas manualmente.");
             }
             lines = [...new Set(ocrModal.rows.map(r => r.articulo))];
+            articulosParaAprender = lines;
         }
     } else {
         lines = ocrModal.rows.map(r => r.valor);
+        if (modo === 'articulos') articulosParaAprender = lines;
     }
 
     const originalValue = targetEl.value;
@@ -1492,12 +1741,19 @@ function insertarOcrModal() {
     targetEl.dispatchEvent(new Event('input'));
     targetEl.dispatchEvent(new Event('focusout'));
 
+    // --- COLA IA (una sola vez por artículo, sin abrir N modales) ---
+    articulosParaAprender.forEach(art => {
+        if (!Inteligencia.consultarArticulo(art)) {
+            window.verificarArticuloInteligente(art);
+        }
+    });
+
     UI.showNotification(`✅ Insertadas ${lines.length} fila(s) en el campo.`);
     UI.closeModal('ocrModal');
 }
 
 // Disparador por botón (subir archivo manual / cámara en móvil) — SIEMPRE alimenta el modal, nunca el campo directo
-document.getElementById('ocr-upload-input').addEventListener('change', function(e) {
+document.getElementById('ocr-upload-input').addEventListener('change', function (e) {
     const file = e.target.files[0];
     if (!file) return;
     setOcrModalImage(file);
@@ -1506,7 +1762,7 @@ document.getElementById('ocr-upload-input').addEventListener('change', function(
 
 // Disparador por portapapeles (Ctrl+V) — solo actúa si el modal OCR está abierto,
 // para no interferir nunca con lo que el usuario esté escribiendo a mano en los campos.
-document.addEventListener('paste', function(e) {
+document.addEventListener('paste', function (e) {
     const modalEl = document.getElementById('ocrModal');
     if (!modalEl || modalEl.style.display !== 'flex') return;
 
