@@ -130,6 +130,7 @@ function buildStateObj() {
         modo_borrar: document.querySelector('input[name="modo_borrar"]:checked')?.value || 'simple',
         modo_swap: document.querySelector('input[name="modo_swap"]:checked')?.value || 'simple',
         posicion_insercion: document.querySelector('input[name="posicion_insercion"]:checked')?.value || 'top',
+        modo_filtro_mass: document.querySelector('input[name="modo_filtro_mass"]:checked')?.value || 'manual',
 
         articulos_excel: document.getElementById('articulos_excel')?.value || '',
         articulos_excel_del: document.getElementById('articulos_excel_del')?.value || '',
@@ -225,6 +226,7 @@ function cargarEstadoFormulario() {
     if (s.modo_borrar) { const r = document.querySelector(`input[name="modo_borrar"][value="${s.modo_borrar}"]`); if (r) { r.checked = true; toggleModoBorrar(); } }
     if (s.modo_swap) { const r = document.querySelector(`input[name="modo_swap"][value="${s.modo_swap}"]`); if (r) { r.checked = true; toggleModoSwap(); } }
     if (s.posicion_insercion) { const r = document.querySelector(`input[name="posicion_insercion"][value="${s.posicion_insercion}"]`); if (r) r.checked = true; }
+    if (s.modo_filtro_mass) { const r = document.querySelector(`input[name="modo_filtro_mass"][value="${s.modo_filtro_mass}"]`); if (r) { r.checked = true; toggleModoFiltroMass(); } }
 
     setVal('busq1', s.busq1); setVal('busq2', s.busq2); setVal('filter-mass', s.filter_mass); if (s.filter_mass) filtrarTiendas('list-mass', 'filter-mass');
     setVal('busq1_del', s.busq1_del); setVal('busq2_del', s.busq2_del); setVal('filter-delete', s.filter_delete); if (s.filter_delete) filtrarTiendas('list-delete', 'filter-delete');
@@ -282,6 +284,13 @@ function switchTab(tabId) {
     } else {
         localStorage.setItem('sqlGenActiveTabPlantillas', tabId);
     }
+}
+
+function toggleModoFiltroMass() {
+    const modo = document.querySelector('input[name="modo_filtro_mass"]:checked')?.value || 'manual';
+    const wrapManual = document.getElementById('wrap-filtro-manual-mass');
+    if (wrapManual) wrapManual.style.display = modo === 'ia' ? 'none' : 'block';
+    guardarEstadoGlobal();
 }
 
 function toggleModoMasivo() {
@@ -934,6 +943,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     UI.cargarHistorialUI();
 
     if (document.querySelector('input[name="modo_masivo"]:checked')) toggleModoMasivo();
+    if (document.querySelector('input[name="modo_filtro_mass"]:checked')) toggleModoFiltroMass();
     if (document.querySelector('input[name="modo_borrar"]:checked')) toggleModoBorrar();
     if (document.querySelector('input[name="modo_swap"]:checked')) toggleModoSwap();
 
@@ -1378,6 +1388,7 @@ document.addEventListener('change', (e) => {
     if (e.target.name === 'modo_p_del') toggleModoPDel();
 
     if (e.target.name === 'modo_masivo') toggleModoMasivo();
+    if (e.target.name === 'modo_filtro_mass') toggleModoFiltroMass();
     if (e.target.name === 'modo_borrar') toggleModoBorrar();
     if (e.target.name === 'modo_swap') toggleModoSwap();
     if (e.target.name === 'posicion_insercion') guardarEstadoGlobal();

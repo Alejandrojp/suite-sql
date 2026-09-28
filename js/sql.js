@@ -2,6 +2,7 @@
 import { state, agregarHistorial } from './state.js';
 import { showNotification, obtenerCampoSQL, copyToClipboard } from './ui.js';
 import { excepcionesTiendas } from './data.js';
+import * as Inteligencia from './inteligencia.js';
 
 function sqlEscape(str) {
     if (str === null || str === undefined) return '';
@@ -71,6 +72,8 @@ export function generarSQLMasivo() {
         let modoMasivo = document.querySelector('input[name="modo_masivo"]:checked').value;
         let isExcel = modoMasivo === 'excel' || modoMasivo === 'excel_tienda';
         let isExcelTienda = modoMasivo === 'excel_tienda';
+        const modoFiltro = document.querySelector('input[name="modo_filtro_mass"]:checked')?.value || 'manual';
+        const usarIA = !isExcel && modoFiltro === 'ia';
 
         let listaArticulos = [];
         let datosExcel = [];
@@ -118,13 +121,14 @@ export function generarSQLMasivo() {
         }
 
         let busq1 = document.getElementById('busq1').value.trim();
-        if (!isExcel && !busq1) {
+        if (!isExcel && !usarIA && !busq1) {
             document.getElementById('busq1').classList.add('input-error');
-            showNotification("¡Falta el filtro principal!");
+            showNotification("¡Falta el filtro principal! (o cambia a '🧠 Usar Grupos IA')");
             document.getElementById('busq1').focus();
             return;
         }
-        if (!isExcel && busq1) agregarHistorial(busq1);
+        if (!isExcel && !usarIA && busq1) agregarHistorial(busq1);
+        document.getElementById('busq1').classList.remove('input-error');
 
         let busq2 = document.getElementById('busq2').value.trim();
         let tipo = document.getElementById('tipoBusqueda').value;
@@ -186,6 +190,87 @@ export function generarSQLMasivo() {
             .map((art, index) => `                WHEN '${art}' THEN ${index + 1}`)
             .join('\n') + `\n                ELSE ${listaArticulos.length + 1}`;
         let listaIn = listaArticulos.map(a => `'${a}'`).join(', ');
+
+        // ============================================
+        // 🌱 RAMA ESPECIAL: MODO IA (uno por artículo)
+        // ============================================
+        if (usarIA) {
+            const pairs = [];      // { art, grupo }
+            const sinGrupo = [];
+            listaArticulos.forEach(art => {
+                const info = Inteligencia.consultarArticulo(art);
+                if (info && info.grupo) pairs.push({ art: safeInt(art), grupo: parseInt(info.grupo, 10) });
+                else sinGrupo.push(art);
+            });
+
+            if (sinGrupo.length > 0) {
+                showNotification(`⚠️ ${sinGrupo.length} artículo(s) sin grupo IA. Apréndelos antes o usa Filtro Manual: ${sinGrupo.slice(0, 8).join(', ')}${sinGrupo.length > 8 ? '…' : ''}`);
+                return;
+            }
+            if (pairs.length === 0) { showNotification("⚠️ No hay artículos válidos para clasificar por IA."); return; }
+
+            // Dedupe por (art, grupo)
+            const seen = new Set();
+            const pairsUnique = pairs.filter(p => {
+                const k = p.art + '|' + p.grupo;
+                if (seen.has(k)) return false;
+                seen.add(k); return true;
+            });
+
+            const unionIA = pairsUnique.map((p, i) =>
+                (i === 0
+                    ? `    SELECT CAST('${p.art}' AS CHAR(50)) as idArticulo, ${p.grupo} as idGrupo`
+                    : `\n    UNION ALL SELECT '${p.art}', ${p.grupo}`)
+            ).join('');
+            const listaInIA = [...new Set(pairsUnique.map(p => `'${p.art}'`))].join(', ');
+            const strTiendasIA = listaTiendas.join(',');
+
+            // MQ2: INSERT con CROSS JOIN respetando el grupo IA por artículo
+            state.generatedQueries.mq2 = `INSERT INTO fo_desglose (idRestaurante, idEmpresa, idGrupo, idArticulo) \nSELECT R.codigo, R.empresa, ListadoIA.idGrupo, ListadoIA.idArticulo \nFROM maeres R \nCROSS JOIN ( \n${unionIA}\n) ListadoIA \nINNER JOIN fo_grupos G ON G.idGrupo = ListadoIA.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nINNER JOIN maeart MA ON MA.codigo = ListadoIA.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendasIA}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = ListadoIA.idArticulo AND D.idGrupo = ListadoIA.idGrupo);`;
+
+            // MQ1: simulación (una fila por art/grupo/tienda esperada)
+            state.generatedQueries.mq1 = `SELECT R.codigo, R.nombre, ListadoIA.idArticulo, G.nombre, G.idGrupo, MA.situacion \nFROM maeres R \nCROSS JOIN ( \n${unionIA}\n) ListadoIA \nINNER JOIN fo_grupos G ON G.idGrupo = ListadoIA.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nINNER JOIN maeart MA ON MA.codigo = ListadoIA.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendasIA}) \nAND MA.situacion <> 'B' \nAND NOT EXISTS (SELECT 1 FROM fo_desglose D WHERE D.idRestaurante = R.codigo AND D.idArticulo = ListadoIA.idArticulo AND D.idGrupo = ListadoIA.idGrupo) \nORDER BY R.codigo, ListadoIA.idArticulo;`;
+
+            // MQ0: limpieza de bajas en esos grupos
+            const gruposIAIn = [...new Set(pairsUnique.map(p => p.grupo))].join(',');
+            state.generatedQueries.mq0 = `DELETE D FROM fo_desglose D \nINNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nINNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendasIA}) \nAND D.idArticulo IN (${listaInIA}) \nAND D.idGrupo IN (${gruposIAIn}) \nAND MA.situacion = 'B';`;
+
+            // MQ3: reordenar SOLO los grupos afectados (por ID)
+            state.generatedQueries.mq3 = `UPDATE fo_desglose Destino \nINNER JOIN ( \n    SELECT idRestaurante, idEmpresa, idGrupo, idArticulo, \n        @num_orden := IF(@grupo_actual = CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo), @num_orden + 1, 0) as nuevo_orden, \n        @grupo_actual := CONCAT(idRestaurante, '_', idEmpresa, '_', idGrupo) \n    FROM ( \n        SELECT D.idRestaurante, D.idEmpresa, D.idGrupo, D.idArticulo, D.orden \n        FROM fo_desglose D \n        INNER JOIN maeres R ON R.codigo = D.idRestaurante AND R.empresa = D.idEmpresa \n        INNER JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = D.idEmpresa \n        WHERE D.idRestaurante IN (${strTiendasIA}) \n        AND D.idGrupo IN (${gruposIAIn}) \n        AND MA.situacion <> 'B' \n        ORDER BY D.idRestaurante, D.idEmpresa, D.idGrupo, COALESCE(D.orden, 999999) ASC, D.idArticulo ASC \n        LIMIT 18446744073709551615 \n    ) TablaOrdenada, \n    (SELECT @num_orden := 0, @grupo_actual := '') Vars \n) Calculado ON Destino.idRestaurante = Calculado.idRestaurante \n   AND Destino.idEmpresa = Calculado.idEmpresa \n   AND Destino.idGrupo = Calculado.idGrupo \n   AND Destino.idArticulo = Calculado.idArticulo \nSET Destino.orden = Calculado.nuevo_orden;`;
+
+            // MQ4: verificación
+            state.generatedQueries.mq4 = `SELECT R.codigo, R.nombre, G.nombre, G.idGrupo, D.idArticulo, D.orden, MA.situacion \nFROM maeres R \nINNER JOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nLEFT JOIN maeart MA ON MA.codigo = D.idArticulo AND MA.empresa = R.empresa \nWHERE D.idArticulo IN (${listaInIA}) \nAND D.idGrupo IN (${gruposIAIn}) \nAND R.codigo IN (${strTiendasIA}) \nORDER BY R.codigo, G.nombre, D.orden;`;
+
+            // MQ5: auditoría final
+            state.generatedQueries.mq5 = `SELECT R.codigo as 'Nº Tienda', R.nombre as Tienda, ListadoIA.idArticulo as Código, MA.descripcion_principal as Descripción, COALESCE(G.nombre, '---') as Grupo, G.idGrupo, D.orden as Orden, CASE WHEN D.idArticulo IS NOT NULL THEN 'OK' ELSE 'FALTA' END as Estado, MA.situacion \nFROM maeres R \nCROSS JOIN ( \n${unionIA}\n) ListadoIA \nLEFT JOIN fo_desglose D ON D.idRestaurante = R.codigo AND D.idEmpresa = R.empresa AND D.idArticulo = ListadoIA.idArticulo AND D.idGrupo = ListadoIA.idGrupo \nLEFT JOIN fo_grupos G ON G.idGrupo = ListadoIA.idGrupo AND G.idRestaurante = R.codigo AND G.idEmpresa = R.empresa AND G.situacion = 'A' \nLEFT JOIN maeart MA ON MA.codigo = ListadoIA.idArticulo AND MA.empresa = R.empresa \nWHERE R.codigo IN (${strTiendasIA}) \nORDER BY Estado ASC, R.codigo, ListadoIA.idArticulo;`;
+
+            // MQ6: deshacer
+            state.generatedQueries.mq6 = `DELETE D FROM fo_desglose D \nINNER JOIN fo_grupos G ON G.idGrupo = D.idGrupo AND G.idRestaurante = D.idRestaurante AND G.idEmpresa = D.idEmpresa AND G.situacion = 'A' \nWHERE D.idRestaurante IN (${strTiendasIA}) \nAND D.idArticulo IN (${listaInIA}) \nAND D.idGrupo IN (${gruposIAIn});`;
+
+            // MQ7: transacción conjunta
+            let combinedIA = state.generatedQueries.mq0 + "\n\n" + state.generatedQueries.mq2 + "\n\n" + state.generatedQueries.mq3;
+            state.generatedQueries.mq7 = wrapTransaction(combinedIA, 'safeMode');
+
+            document.getElementById('mq0').textContent = state.generatedQueries.mq0;
+            document.getElementById('mq1').textContent = state.generatedQueries.mq1;
+            document.getElementById('mq2').textContent = state.generatedQueries.mq2;
+            document.getElementById('mq3').textContent = state.generatedQueries.mq3;
+            document.getElementById('mq4').textContent = state.generatedQueries.mq4;
+            document.getElementById('mq5').textContent = state.generatedQueries.mq5;
+            document.getElementById('mq6').textContent = state.generatedQueries.mq6;
+            document.getElementById('mq7').textContent = state.generatedQueries.mq7;
+
+            if (window.Prism) ['mq0','mq1','mq2','mq3','mq4','mq5','mq6','mq7'].forEach(id => Prism.highlightElement(document.getElementById(id)));
+
+            document.getElementById('time-mass').innerText = `(Generado IA: ${new Date().toLocaleTimeString()} · ${pairsUnique.length} pares art/grupo)`;
+            document.getElementById('res-mass').style.display = 'block';
+            document.getElementById('res-mass').scrollIntoView({ behavior: "smooth" });
+            showNotification(`🧠 Modo IA: ${pairsUnique.length} par(es) artículo/grupo en ${listaTiendas.length} tienda(s)`);
+            return;
+        }
+        // ============================================
+        // FIN RAMA IA — sigue el flujo normal
+        // ============================================
 
         let reorderWhere = `AND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''}`;
         let deleteWhere = `AND ${campoSQL} ${compareOp} '${b1}' ${b2 !== '%' ? `AND ${campoSQL} ${compareOp} '${b2}'` : ''}`;
