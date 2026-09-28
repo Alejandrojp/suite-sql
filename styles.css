@@ -514,3 +514,10 @@ button[data-action="swapProveedores"]:active {
     transform: rotate(180deg) scale(0.9);
     background-color: var(--brand-hover) !important;
 }
+
+/* Fix del botón "Guardar y Aprender" del modal IA */
+#aiModal .editor-actions .btn-generate {
+    white-space: nowrap;
+    min-width: 200px;
+    padding: 12px 22px;
+}
