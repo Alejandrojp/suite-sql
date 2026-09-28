@@ -341,18 +341,33 @@
 
                 <!-- Modal Gestor IA -->
                 <div id="iaManagerModal" class="modal">
-                    <div class="modal-content" style="max-width: 620px;">
+                    <div class="modal-content" style="max-width: 680px;">
                         <div class="modal-header">
                             <h2>🧠 Mis Artículos Aprendidos</h2>
                             <span class="close-modal" data-modal="iaManagerModal">&times;</span>
                         </div>
-                        <p style="font-size:0.9em; color:#666; margin-top:0;">
-                            Estos artículos ya no se preguntarán. Puedes editar el grupo o eliminarlos del aprendizaje.
-                        </p>
+
+                        <div id="ia-stats"
+                            style="font-size:12.5px; color:var(--text-muted); padding:8px 12px; background:var(--card-muted); border-radius:6px; margin-bottom:10px;">
+                            …
+                        </div>
+
+                        <div style="display:flex; gap:8px; margin-bottom:12px;">
+                            <input type="text" id="ia-search" placeholder="🔍 Buscar por código o nombre..."
+                                style="flex:1; padding:6px 10px; font-size:13px;">
+                        </div>
+
                         <div class="group-manager-list" id="iaManagerList" style="max-height: 380px;"></div>
-                        <div class="editor-actions" style="justify-content: space-between;">
-                            <button class="btn-small" style="background:#dc3545;" data-action="borrarTodaIA">🗑️ Borrar
-                                TODO</button>
+
+                        <div class="editor-actions" style="justify-content: space-between; flex-wrap:wrap; gap:8px;">
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;"
+                                    data-action="exportarUsuarioIA">💾 Exportar</button>
+                                <button class="btn-small" style="background:#17a2b8; border-color:#17a2b8;"
+                                    data-action="importarUsuarioIA">📂 Importar</button>
+                                <button class="btn-small" style="background:#e67e22; border-color:#e67e22;"
+                                    data-action="resetearUsuarioIA">🔄 Resetear</button>
+                            </div>
                             <button class="btn-secondary" data-action="closeModal"
                                 data-modal="iaManagerModal">Cerrar</button>
                         </div>
